@@ -1,0 +1,9 @@
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Name=thermostat
+Comment=Thermostat
+Exec=sudo /home/pi/thermostat/thermostat.sh
+StartupNotify=false
+Terminal=false
+Hidden=-false
