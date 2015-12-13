@@ -1,1 +1,35 @@
-{"weather": {"appkey": "your openweathermap.org appkey", "location": "Barrie,ca", "weatherRefreshInterval": 10, "forecastRefreshInterval": 60, "weatherExceptionInterval": 5}, "web": {"host": "discover", "port": 80}, "scale": {"tempScale": "metric"}, "thermostat": { "tempCheckInterval": 3, "maxTemp": 30.0, "fanPin": 25, "minTemp": 15.0, "heatPin": 23, "coolPin": 18, "pirEnabled": 0, "pirPin": 5, "tempHysteresis": 0.5, "tempStep": 0.5, "minUIEnabled": 1, "minUITimeout": 60}, "calibration": { "elevation": 269, "boilingMeasured": 99.098043, "freezingMeasured": 0.01 }}
+{
+    "calibration": {
+        "boilingMeasured": 99.098043,
+        "elevation": 269,
+        "freezingMeasured": 0.01
+    },
+    "scale": {
+        "tempScale": "metric"
+    },
+    "thermostat": {
+        "coolPin": 18,
+        "fanPin": 25,
+        "heatPin": 23,
+        "maxTemp": 30.0,
+        "minTemp": 15.0,
+        "minUIEnabled": 1,
+        "minUITimeout": 60,
+        "pirEnabled": 0,
+        "pirPin": 5,
+        "tempCheckInterval": 3,
+        "tempHysteresis": 0.5,
+        "tempStep": 0.5
+    },
+    "weather": {
+        "appkey": "your openweathermap.org appkey",
+        "forecastRefreshInterval": 60,
+        "location": "Barrie,ca",
+        "weatherExceptionInterval": 5,
+        "weatherRefreshInterval": 10
+    },
+    "web": {
+        "host": "discover",
+        "port": 80
+    }
+}
