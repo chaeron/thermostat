@@ -23,6 +23,8 @@ Key features include:
 	6. Battery backup (optional)
 	7. Supports Celcius (default) or Farenheit
     8. Supports calibration of your temperature sensor
+	9. Minimal UI (screensaver) mode
+	10. PIR Motion sensor to switch from minimal to full UI mode (optional)
 
 ###Thermostat User Interface
 
@@ -49,11 +51,13 @@ Key features include:
 	- Official Raspberry Pi Foundation 7" Touch Sensitive LCD screen
 	- CanaKit WiFi Adapter 150 Mbps
 	- Prototyping shield/board
-	- Makeatronics 24V AC SSR Board relay board to interface to furnace/AC (from http://makeatronics.blogspot.com/p/store.html, fully assembled)
+	- Makeatronics 24V AC SSR Board relay board(s) to interface to furnace/AC (from http://makeatronics.blogspot.com/p/store.html, fully assembled)
 	- PowerBoost 1000 Charger (from Adafruit)
 	- Lithium Ion Polymer Battery - 3.7v 2500mAh (from Adafruit)
 	- DS18B20 Weatherproof temperature sensor
 	- Pimoroni Raspberry Pi 7" Touchscreen Display Case (optional, from Adafruit)
+	- Adafruit PIR sensor (optional, https://www.adafruit.com/products/189)
+	- Custom built wooden thermostat enclosure
 
 
 ##Software Requirements (as used/tested by author):
@@ -86,13 +90,17 @@ The software comes configured to use the following default GPIO pins:
 	GPIO 18 - Cool (A/C) relay control
 	GPIO 23 - Heat (Furnace) relay control
 	GPIO 25 - Fan relay control
+	GPIO 5  - PIR Motion Sensor (optional)
  
 If you wish to use different pins, then change the appropriate values in the thermostat_settings.json file. 
 
 The author used a Raspberry Pi 2 Model B for his thermostat. Less capable Pi hardware may not provide adequate response times for the touch and web interfaces.
 
 See http://makeatronics.blogspot.com/2013/06/24v-ac-solid-state-relay-board.html for how to wire the thermostat into your heating/cooling system, and 
-https://learn.adafruit.com/adafruits-raspberry-pi-lesson-11-ds18b20-temperature-sensing/hardware for how to wire the temperature sensor into the Pi.
+https://learn.adafruit.com/adafruits-raspberry-pi-lesson-11-ds18b20-temperature-sensing/hardware for how to wire the temperature sensor into the Pi. 
+
+The author's HVAC system had separate R and Rc hot lines, with the furnace switched to the R and the A/C and fan switched to the Rc lines, and so required two separate
+Makeatronics 24V AC SSR Boards. YMMV.
 
 
 ##Temperature Sensor Calibration:
@@ -122,6 +130,13 @@ the thermostat code in /home/pi/thermostat. If you have the code elsewhere then 
 This implementation assumes that your Pi Thermotstat is on a private, access controlled, local wifi network, and is not accessible over the internet. As such, there
 is no security implemented for the web interface. Anyone with access to the wifi network will be able to control your thermostat! If you want/need more stringent
 security/authentication controls for your thermostat, you will have to implement them yourself. TBD, who
+
+
+##Minimal UI (screensaver) mode: 
+
+The Minimal UI (screensaver) mode is enabled by default. This mode will just show the current temperature, greyed out after a specified timeout. To restore the full UI, just touch the screen anywhere. You can disable this in the in the thermostat_settings.json file. Default timeout to display the minimal UI is 1 minute, and can be changed in the in the settings file as well.
+
+You can optionally attach a PIR motion sensor and use that to switch back to full UI mode when motion is detected. Use of a PIR sensor is disabled by default. You can enable the PIR sensor in the thermostat_settings.json file.
 
 
 ##Credits
