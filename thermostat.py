@@ -1,0 +1,1019 @@
+### BEGIN LICENSE
+# Copyright (c) 2015 Andrzej Taramina <andrzej@chaeron.com>
+
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation
+# files (the "Software"), to deal in the Software without
+# restriction, including without limitation the rights to use,
+# copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following
+# conditions:
+
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+# OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+# HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+### END LICENSE
+
+##############################################################################
+#                                                                            #
+#       Core Imports                                                         #
+#                                                                            #
+##############################################################################
+
+import threading
+import math
+import os, os.path
+import time
+import urllib2
+import json
+import random
+import socket
+
+
+##############################################################################
+#                                                                            #
+#       Kivy UI Imports                                                      #
+#                                                                            #
+##############################################################################
+
+import kivy
+kivy.require( '1.9.0' ) # replace with your current kivy version !
+
+from kivy.app import App
+from kivy.uix.button import Button
+from kivy.uix.togglebutton import ToggleButton
+from kivy.uix.label import Label
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.image import Image
+from kivy.uix.slider import Slider
+from kivy.clock import Clock
+from kivy.graphics import Color, Rectangle
+from kivy.storage.jsonstore import JsonStore
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition
+
+
+##############################################################################
+#                                                                            #
+#       Other Imports                                                        #
+#                                                                            #
+##############################################################################
+
+import cherrypy
+import schedule
+
+
+##############################################################################
+#                                                                            #
+#       GPIO & Simulation Imports                                            #
+#                                                                            #
+##############################################################################
+
+try:
+	import RPi.GPIO as GPIO
+except ImportError:
+	import FakeRPi.GPIO as GPIO
+
+
+##############################################################################
+#                                                                            #
+#       Sensor Imports                                                       #
+#                                                                            #
+##############################################################################
+
+from w1thermsensor import W1ThermSensor
+
+
+##############################################################################
+#                                                                            #
+#       Settings                                                             #
+#                                                                            #
+##############################################################################
+
+# Debug settings
+
+debug 			= False
+useTestSchedule = False
+
+# Threading Locks
+
+thermostatLock = threading.RLock()
+weatherLock    = threading.Lock()
+scheduleLock   = threading.RLock()
+
+
+# Thermostat persistent settings
+
+settings = JsonStore( "thermostat_settings.json" )
+
+
+# Various temperature settings:
+
+tempScale		  = settings.get( "scale" )[ "tempScale" ]
+scaleUnits 	  	  = "c" if tempScale == "metric" else "f"
+precipUnits	      = " mm" if tempScale == "metric" else '"'
+precipFactor	  = 1.0 if tempScale == "metric" else 0.0393701
+precipRound 	  = 0 if tempScale == "metric" else 1
+sensorUnits		  = W1ThermSensor.DEGREES_C if tempScale == "metric" else W1ThermSensor.DEGREES_F
+windFactor		  = 3.6 if tempScale == "metric" else 1.0
+windUnits		  = " km/h" if tempScale == "metric" else " mph"
+
+currentTemp       = 22.0 if tempScale == "metric" else 72.0
+setTemp           = 22.0 if not( settings.exists( "state" ) ) else settings.get( "state" )[ "setTemp" ]
+
+tempHysteresis    = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempHysteresis" ]
+
+tempCheckInterval = 3    if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempCheckInterval" ]
+
+minUIEnabled 	  = 0    if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minUIEnabled" ]
+minUITimeout 	  = 3    if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minUITimeout" ]
+minUITimer		  = None
+
+
+# Temperature calibration settings:
+
+elevation		  = 0 if not( settings.exists( "thermostat" ) ) else settings.get( "calibration" )[ "elevation" ]
+boilingPoint	  = ( 100.0 - 0.003353 * elevation ) if tempScale == "metric" else ( 212.0 - 0.00184 * elevation )
+freezingPoint	  = 0.01 if tempScale == "metric" else 32.018
+referenceRange	  = boilingPoint - freezingPoint
+
+boilingMeasured   = settings.get( "calibration" )[ "boilingMeasured" ]
+freezingMeasured  = settings.get( "calibration" )[ "freezingMeasured" ]
+measuredRange	  = boilingMeasured - freezingMeasured
+
+if debug:
+	print( "Elevation:         " + str( elevation ) )
+	print( "Boiling Point:     " + str( boilingPoint ) )
+	print( "Freezing Point:    " + str( freezingPoint ) )
+	print( "Ref Range:         " + str( referenceRange ) )
+
+	print( "Boiling Measured:  " + str( boilingMeasured ) )
+	print( "Freezing Measured: " + str( freezingMeasured ) )
+	print( "Measured Range:    " + str( measuredRange ) )
+
+
+# UI Slider settings:
+
+minTemp			  = 15.0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minTemp" ]
+maxTemp			  = 30.0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "maxTemp" ]
+tempStep		  = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempStep" ]
+
+try:
+	tempSensor = W1ThermSensor()
+except:
+	tempSensor = None
+
+# GPIO Pin setup and utility routines:
+
+coolPin		 		= 18 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "coolPin" ]
+heatPin 			= 23 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "heatPin" ]
+fanPin  			= 25 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "fanPin" ]
+
+pirEnabled 			= 0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "pirEnabled" ]
+pirPin  			= 5 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "pirPin" ]
+
+pirCheckInterval 	= 0.5		# Check for motion on the PIR sensor every 1/2 second, if enabled
+
+GPIO.setmode( GPIO.BCM )
+GPIO.setup( coolPin, GPIO.OUT )
+GPIO.output( coolPin, GPIO.LOW )
+GPIO.setup( heatPin, GPIO.OUT )
+GPIO.output( heatPin, GPIO.LOW )
+GPIO.setup( fanPin, GPIO.OUT )
+GPIO.output( fanPin, GPIO.LOW )
+
+if pirEnabled:
+	GPIO.setup( pirPin, GPIO.IN )
+	if debug:
+		print( "PIR Enabled on pin: " + str( pirPin ) )
+
+
+##############################################################################
+#                                                                            #
+#       UI Controls/Widgets                                                  #
+#                                                                            #
+##############################################################################
+
+controlColours = {
+					"normal": ( 1.0, 1.0, 1.0, 1.0 ),
+					"Cool":   ( 0.0, 0.0, 1.0, 0.4 ),
+					"Heat":   ( 1.0, 0.0, 0.0, 1.0 ),
+					"Fan":    ( 0.0, 1.0, 0.0, 0.4 ),
+					"Hold":   ( 0.0, 1.0, 0.0, 0.4 ),					
+				 }
+
+
+def setControlState( control, state ):
+	with thermostatLock:
+		control.state = state
+		if state == "normal":
+			control.background_color = controlColours[ "normal" ]
+		else:
+			control.background_color = controlColours[ control.text.replace( "[b]", "" ).replace( "[/b]", "" ) ]
+
+
+coolControl = ToggleButton( text="[b]Cool[/b]", 
+							markup=True, 
+							size_hint = ( None, None )
+						  )
+
+setControlState( coolControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "coolControl" ] )
+
+heatControl = ToggleButton( text="[b]Heat[/b]", 
+							markup=True, 
+							size_hint = ( None, None )
+						  )
+
+setControlState( heatControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "heatControl" ] )
+
+fanControl  = ToggleButton( text="[b]Fan[/b]", 
+							markup=True, 
+							size_hint = ( None, None )
+						  )
+
+setControlState( fanControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "fanControl" ] )
+
+holdControl = ToggleButton( text="[b]Hold[/b]", 
+							markup=True, 
+							size_hint = ( None, None )
+						  )
+
+setControlState( holdControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "holdControl" ] )
+
+
+
+def get_status_string():
+	with thermostatLock:
+		sched = "None"
+
+		if holdControl.state == "down":
+			sched = "Hold"
+		elif useTestSchedule:
+			sched = "Test"
+		elif heatControl.state == "down":
+			sched = "Heat"
+		elif coolControl.state == "down":
+			sched = "Cool"
+	
+		return "[b]System:[/b]\n  " + \
+			   "Heat:     " + ( "[color=00ff00][b]On[/b][/color]" if GPIO.input( heatPin ) else "Off" ) + "\n  " + \
+		       "Cool:      " + ( "[color=00ff00][b]On[/b][/color]" if GPIO.input( coolPin ) else "Off" ) + "\n  " + \
+		       "Fan:       " + ( "[color=00ff00][b]On[/b][/color]" if GPIO.input( fanPin ) else "Auto" ) + "\n  " + \
+			   "Sched:   " + sched
+
+
+currentLabel = Label( text="[b]" + str( currentTemp ) + scaleUnits + "[/b]", size_hint = ( None, None ), font_size='100sp', markup=True, text_size=( 300, 200 ) )
+altCurLabel	 = Label( text=currentLabel.text, size_hint = ( None, None ), font_size='100sp', markup=True, text_size=( 300, 200 ), color=( 0.4, 0.4, 0.4, 0.2 ) )
+
+setLabel     = Label( text="  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]", size_hint = ( None, None ), font_size='25sp', markup=True, text_size=( 100, 100 ) )
+statusLabel  = Label( text=get_status_string(), size_hint = ( None, None ),  font_size='20sp', markup=True, text_size=( 140, 130 ) )
+dtLabel		 = Label( text="[b]" + time.strftime("% a%b %d, %Y, %I:%M %p") + "[/b]", size_hint = ( None, None ), font_size='20sp', markup=True, text_size=( 270, 40 ) )
+
+tempSlider 	 = Slider( orientation='vertical', min=minTemp, max=maxTemp, step=tempStep, value=setTemp, size_hint = ( None, None ) )
+
+screenMgr    = None
+
+
+##############################################################################
+#                                                                            #
+#       Weather functions/constants/widgets                                  #
+#                                                                            #
+##############################################################################
+
+weatherLocation 	 = settings.get( "weather" )[ "location" ]
+weatherAppKey		 = settings.get( "weather" )[ "appkey" ]
+weatherURLBase  	 = "http://api.openweathermap.org/data/2.5/"
+weatherURLCurrent 	 = weatherURLBase + "weather?units=" + tempScale + "&q=" + weatherLocation + "&APPID=" + weatherAppKey
+weatherURLForecast 	 = weatherURLBase + "forecast/daily?units=" + tempScale + "&q=" + weatherLocation + "&APPID=" + weatherAppKey
+
+weatherRefreshInterval   = settings.get( "weather" )[ "weatherRefreshInterval" ] * 60  
+forecastRefreshInterval  = settings.get( "weather" )[ "forecastRefreshInterval" ] * 60  
+weatherExceptionInterval = settings.get( "weather" )[ "weatherExceptionInterval" ] * 60  
+
+weatherSummaryLabel  = Label( text="", size_hint = ( None, None ), font_size='20sp', markup=True, text_size=( 200, 20 ) )
+weatherDetailsLabel  = Label( text="", size_hint = ( None, None ), font_size='20sp', markup=True, text_size=( 300, 150 ), valign="top" )
+weatherImg           = Image( source="web/images/na.png", size_hint = ( None, None ) )
+
+forecastTodaySummaryLabel = Label( text="", size_hint = ( None, None ), font_size='15sp',  markup=True, text_size=( 100, 15 ) )
+forecastTodayDetailsLabel = Label( text="", size_hint = ( None, None ), font_size='15sp',  markup=True, text_size=( 200, 150 ), valign="top" )
+forecastTodayImg   		  = Image( source="web/images/na.png", size_hint = ( None, None ) )
+forecastTomoSummaryLabel  = Label( text="", size_hint = ( None, None ), font_size='15sp', markup=True, text_size=( 100, 15 ))
+forecastTomoDetailsLabel  = Label( text="", size_hint = ( None, None ), font_size='15sp', markup=True, text_size=( 200, 150 ), valign="top" )
+forecastTomoImg    		  = Image( source="web/images/na.png", size_hint = ( None, None ) )
+
+
+def get_weather( url ):
+	return json.loads( urllib2.urlopen( url ).read() )
+
+
+def get_cardinal_direction( heading ):
+	directions = [ "N", "NE", "E", "SE", "S", "SW", "W", "NW", "N" ]
+	return directions[ int( round( ( ( heading % 360 ) / 45 ) ) ) ]
+
+
+def display_current_weather( dt ):
+	with weatherLock:
+		interval = weatherRefreshInterval
+
+		try:
+			weather = get_weather( weatherURLCurrent )
+
+			weatherImg.source = "web/images/" + weather[ "weather" ][ 0 ][ "icon" ] + ".png" 
+	
+			weatherSummaryLabel.text = "[b]" + weather[ "weather" ][ 0 ][ "description" ].title() + "[/b]"
+
+			weatherDetailsLabel.text = "\n".join( (
+				"Temp:       " + str( int( round( weather[ "main" ][ "temp" ], 0 ) ) ) + scaleUnits,
+				"Humidity: " + str( weather[ "main" ][ "humidity" ] ) + "%",
+				"Wind:        " + str( int( round( weather[ "wind" ][ "speed" ] * windFactor ) ) ) + windUnits + " " + get_cardinal_direction( weather[ "wind" ][ "deg" ] ),
+				"Clouds:     " + str( weather[ "clouds" ][ "all" ] ) + "%",
+				"Sun:           " + time.strftime("%H:%M", time.localtime( weather[ "sys" ][ "sunrise" ] ) ) + " am, " + time.strftime("%I:%M", time.localtime( weather[ "sys" ][ "sunset" ] ) ) + " pm"
+			) )
+
+		except:
+			interval = weatherExceptionInterval
+
+			weatherImg.source = "web/images/na.png"
+			weatherSummaryLabel.text = ""
+			weatherDetailsLabel.text = ""
+
+		Clock.schedule_once( display_current_weather, interval )
+
+
+def get_precip_amount( raw ):
+	precip = round( raw * precipFactor, precipRound )
+
+	if tempScale == "metric":
+		return str( int ( precip ) )
+	else:
+		return str( precip )
+
+
+def display_forecast_weather( dt ):
+	with weatherLock:
+		interval = forecastRefreshInterval
+
+		try:
+			forecast = get_weather( weatherURLForecast )
+
+			today    = forecast[ "list" ][ 0 ]
+			tomo     = forecast[ "list" ][ 1 ]
+
+			forecastTodayImg.source = "web/images/" + today[ "weather" ][ 0 ][ "icon" ] + ".png" 
+
+			forecastTodaySummaryLabel.text = "[b]" + today[ "weather" ][ 0 ][ "description" ].title() + "[/b]"		
+	
+			todayText = "\n".join( (
+				"High:         " + str( int( round( today[ "temp" ][ "max" ], 0 ) ) ) + scaleUnits + ", Low: " + str( int( round( today[ "temp" ][ "min" ], 0 ) ) ) + scaleUnits,
+				"Humidity: " + str( today[ "humidity" ] ) + "%",
+				"Wind:        " + str( int( round( today[ "speed" ] * windFactor ) ) ) + windUnits + " " + get_cardinal_direction( today[ "deg" ] ),
+				"Clouds:     " + str( today[ "clouds" ] ) + "%",
+			) )
+
+			if "rain" in today or "snow" in today:
+				todayText += "\n"
+				if "rain" in today:
+					todayText += "Rain:         " + get_precip_amount( today[ "rain" ] ) + precipUnits   
+					if "snow" in today:
+						todayText += ", Snow: " + get_precip_amount( today[ "snow" ] ) + precipUnits
+				else:
+					todayText += "Snow:         " + get_precip_amount( today[ "snow" ] ) + precipUnits
+
+			forecastTodayDetailsLabel.text = todayText;
+
+			forecastTomoImg.source = "web/images/" + tomo[ "weather" ][ 0 ][ "icon" ] + ".png" 
+
+			forecastTomoSummaryLabel.text = "[b]" + tomo[ "weather" ][ 0 ][ "description" ].title() + "[/b]"		
+	
+			tomoText = "\n".join( (
+				"High:         " + str( int( round( tomo[ "temp" ][ "max" ], 0 ) ) ) + scaleUnits + ", Low: " + str( int( round( tomo[ "temp" ][ "min" ], 0 ) ) ) + scaleUnits,
+				"Humidity: " + str( tomo[ "humidity" ] ) + "%",
+				"Wind:        " + str( int( round( tomo[ "speed" ] * windFactor ) ) ) + windUnits + " " + get_cardinal_direction( tomo[ "deg" ] ),
+				"Clouds:     " + str( tomo[ "clouds" ] ) + "%",
+			) )
+
+			if "rain" in tomo or "snow" in tomo:
+				tomoText += "\n"
+				if "rain" in tomo:
+					tomoText += "Rain:         " + get_precip_amount( tomo[ "rain" ] ) + precipUnits
+					if "snow" in tomo:
+						tomoText += ", Snow: " + get_precip_amount( tomo[ "snow" ] ) + precipUnits
+				else:
+					tomoText += "Snow:         " + get_precip_amount( tomo[ "snow" ] ) + precipUnits
+
+			forecastTomoDetailsLabel.text = tomoText
+
+		except:
+			interval = weatherExceptionInterval
+
+			forecastTodayImg.source = "web/images/na.png"
+			forecastTodaySummaryLabel.text = ""
+			forecastTodayDetailsLabel.text = ""
+			forecastTomoImg.source = "web/images/na.png"
+			forecastTomoSummaryLabel.text = ""
+			forecastTomoDetailsLabel.text = ""
+
+		Clock.schedule_once( display_forecast_weather, interval )
+
+
+##############################################################################
+#                                                                            #
+#       Utility Functions                                                    #
+#                                                                            #
+##############################################################################
+
+def get_ip_address():
+	s = socket.socket( socket.AF_INET, socket.SOCK_DGRAM )
+	s.settimeout( 10 )   # 10 seconds
+	try:
+		s.connect( ( "8.8.8.8", 80 ) )    # Google DNS server
+		return s.getsockname()[0] 
+	except socket.error:
+		return "127.0.0.1"
+
+
+##############################################################################
+#                                                                            #
+#       Thermostat Implementation                                            #
+#                                                                            #
+##############################################################################
+
+# Main furnace/AC system control function:
+
+def change_system_settings():
+	with thermostatLock:
+		hpin_start = str( GPIO.input( heatPin ) )
+		cpin_start = str( GPIO.input( coolPin ) )
+		fpin_start = str( GPIO.input( fanPin ) )
+
+		if debug:
+			print( "Change System Settings Called" )
+			print( "   Current Temp: " + str( currentTemp ) )
+			print( "   Set Temp:     " + str( setTemp ) )
+			print( "   Heat Button:  " + ( "On" if heatControl.state == "down" else "Off" ) ) 
+			print( "   Cool Button:  " + ( "On" if coolControl.state == "down" else "Off" ) ) 
+			print( "   Fan  Button:  " + ( "On" if fanControl.state == "down" else "Off" ) ) 
+
+		if heatControl.state == "down":
+			GPIO.output( coolPin, GPIO.LOW )
+
+			if setTemp >= currentTemp + tempHysteresis:
+				GPIO.output( heatPin, GPIO.HIGH )
+				GPIO.output( fanPin, GPIO.HIGH )	
+			elif setTemp <= currentTemp:
+				GPIO.output( heatPin, GPIO.LOW )
+				if fanControl.state != "down" and not GPIO.input( coolPin ):
+					GPIO.output( fanPin, GPIO.LOW )			
+		else:
+			GPIO.output( heatPin, GPIO.LOW )
+
+			if coolControl.state == "down":
+				if setTemp <= currentTemp - tempHysteresis:
+					GPIO.output( coolPin, GPIO.HIGH )
+					GPIO.output( fanPin, GPIO.HIGH )
+				elif setTemp >= currentTemp:
+					GPIO.output( coolPin, GPIO.LOW )
+					if fanControl.state != "down" and not GPIO.input( heatPin ):
+						GPIO.output( fanPin, GPIO.LOW )					
+			else:
+				GPIO.output( coolPin, GPIO.LOW )
+				if fanControl.state != "down" and not GPIO.input( heatPin ):
+					GPIO.output( fanPin, GPIO.LOW )
+
+		if fanControl.state == "down":
+			GPIO.output( fanPin, GPIO.HIGH )
+		else:
+			if not GPIO.input( heatPin ) and not GPIO.input( coolPin ):
+				GPIO.output( fanPin, GPIO.LOW )
+
+		# save the thermostat state in case of restart
+		settings.put( "state",	setTemp=setTemp, 
+					  			heatControl=heatControl.state, coolControl=coolControl.state, fanControl=fanControl.state, holdControl=holdControl.state
+		)
+
+		statusLabel.text = get_status_string()
+
+		if debug:
+			print( "   Heat Pin:     " + hpin_start + " --> " + str( GPIO.input( heatPin ) ) )
+			print( "   Cool Pin:     " + cpin_start + " --> " + str( GPIO.input( coolPin ) ) )
+			print( "   Fan Pin:      " + fpin_start + " --> " + str( GPIO.input( fanPin ) ) )
+
+
+# This callback will be bound to the touch screen UI buttons:
+
+def control_callback( control ):
+	with thermostatLock:
+		if debug:
+			print( "Button pressed,", control.text, " state: ", control.state )
+
+		setControlState( control, control.state ) 	# make sure we change the background colour!
+
+		if control is coolControl:
+			if control.state == "down":
+				setControlState( heatControl, "normal" )
+			reloadSchedule()
+			
+		if control is heatControl:
+			if control.state == "down":
+				setControlState( coolControl, "normal" )	
+			reloadSchedule()						
+		
+
+# Check the current sensor temperature
+
+def check_sensor_temp( dt ):
+	with thermostatLock:
+		global currentTemp
+		global tempSensor
+		if tempSensor is not None:
+			rawTemp = tempSensor.get_temperature( sensorUnits )
+			correctedTemp = ( ( ( rawTemp - freezingMeasured ) * referenceRange ) / measuredRange ) + freezingPoint
+			currentTemp = round( correctedTemp, 1 )
+			if debug:
+				print( "Raw Temp:         " + str( rawTemp ) )
+				print( "Corrected Temp:   " + str( correctedTemp ) )
+
+		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
+		altCurLabel.text  = currentLabel.text
+		dtLabel.text      = "[b]" + time.strftime("%a %b %d, %Y, %I:%M %p") + "[/b]"
+		change_system_settings()
+
+
+# This is called when the desired temp slider is updated:
+
+def update_set_temp( slider, value ):
+	with thermostatLock:
+		global setTemp
+		setTemp = round( slider.value, 1 )
+		setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
+
+
+# Check the PIR motion sensor status
+
+def check_pir( pin ):
+	global minUITimer
+
+	with thermostatLock:
+		if GPIO.input( pirPin ): 
+			if minUITimer != None:
+				  Clock.unschedule( show_minimal_ui )
+
+			minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout ) 
+
+			if screenMgr.current == "minimalUI":
+			   screenMgr.current = "thermostatUI"
+
+			if debug:
+				print( "Motion detected on PIR pin: " + str( pirPin ) + "!" )
+		else:
+			if debug:
+				print( "No Motion detected on PIR pin: " + str( pirPin ) )
+
+
+# Minimal UI Display functions and classes
+
+def show_minimal_ui( dt ):
+	with thermostatLock:
+		screenMgr.current = "minimalUI"
+
+
+class MinimalScreen( Screen ):
+	def on_touch_down( self, touch ):
+		if self.collide_point( *touch.pos ):
+			touch.grab( self )
+			return True
+
+	def on_touch_up( self, touch ):
+		global minUITimer
+
+		if touch.grab_current is self:
+			touch.ungrab( self )
+			with thermostatLock:
+				if minUITimer != None:
+					Clock.unschedule( show_minimal_ui )
+				minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout )
+				self.manager.current = "thermostatUI"
+			return True
+
+
+##############################################################################
+#                                                                            #
+#       Kivy Thermostat App class                                            #
+#                                                                            #
+##############################################################################
+
+class ThermostatApp( App ):
+
+	def build( self ):
+		global screenMgr
+
+		# Set up the thermostat UI layout:
+		thermostatUI = FloatLayout( size=( 800, 480 ) )
+
+		# Make the background black:
+		with thermostatUI.canvas.before:
+			Color( 0.0, 0.0, 0.0, 1 )
+			self.rect = Rectangle( size=( 800, 480 ), pos=thermostatUI.pos )
+
+		# Create the rest of the UI objects ( and bind them to callbacks, if necessary ):
+		
+		wimg = Image( source='web/images/logo.png' )
+		
+		coolControl.bind( on_press=control_callback )		
+		heatControl.bind( on_press=control_callback )	
+		fanControl.bind( on_press=control_callback )
+		holdControl.bind( on_press=control_callback )
+
+		tempSlider.bind( on_touch_down=update_set_temp, on_touch_move=update_set_temp )
+
+       	# set sizing and position info
+
+		wimg.size = ( 80, 80 )
+		wimg.size_hint = ( None, None )
+		wimg.pos = ( 10, 380 )
+
+		heatControl.size  = ( 80, 80 )
+		heatControl.pos = ( 680, 380 )
+
+		coolControl.size  = ( 80, 80 )
+		coolControl.pos = ( 680, 270 )
+
+		fanControl.size  = ( 80, 80 )
+		fanControl.pos = ( 680, 160 )
+
+		statusLabel.pos = ( 670, 40 )
+
+		tempSlider.size  = ( 100, 360 )
+		tempSlider.pos = ( 560, 20 )
+
+		holdControl.size  = ( 80, 80 )
+		holdControl.pos = ( 460, 380 )
+
+		setLabel.pos = ( 580, 390 )
+
+		currentLabel.pos = ( 390, 290 )
+
+		dtLabel.pos = ( 180, 370 )
+
+		weatherImg.pos = ( 265, 160 )
+		weatherSummaryLabel.pos = ( 430, 160 )
+		weatherDetailsLabel.pos = ( 395, 60 )
+
+		forecastTodayHeading = Label( text="[b]Today[/b]:", font_size='20sp', markup=True, size_hint = ( None, None ), pos = ( 0, 290 ) )
+		
+		forecastTodayImg.pos = ( 0, 260 )
+		forecastTodaySummaryLabel.pos = ( 100, 260 )
+		forecastTodayDetailsLabel.pos = ( 80, 167 )
+
+		forecastTomoHeading = Label( text="[b]Tomorrow[/b]:", font_size='20sp', markup=True, size_hint = ( None, None ), pos = ( 20, 130 ) )
+
+		forecastTomoImg.pos = ( 0, 100 )
+		forecastTomoSummaryLabel.pos = ( 100, 100 )
+		forecastTomoDetailsLabel.pos = ( 80, 7 )
+
+		# Add the UI elements to the thermostat UI layout:
+		thermostatUI.add_widget( wimg )
+		thermostatUI.add_widget( coolControl )
+		thermostatUI.add_widget( heatControl )
+		thermostatUI.add_widget( fanControl )
+		thermostatUI.add_widget( holdControl )
+		thermostatUI.add_widget( tempSlider )
+		thermostatUI.add_widget( currentLabel )
+		thermostatUI.add_widget( setLabel )
+		thermostatUI.add_widget( statusLabel )
+		thermostatUI.add_widget( dtLabel )
+		thermostatUI.add_widget( weatherImg )
+		thermostatUI.add_widget( weatherSummaryLabel )
+		thermostatUI.add_widget( weatherDetailsLabel )
+		thermostatUI.add_widget( forecastTodayHeading )
+		thermostatUI.add_widget( forecastTodayImg )
+		thermostatUI.add_widget( forecastTodaySummaryLabel )
+		thermostatUI.add_widget( forecastTodayDetailsLabel )
+		thermostatUI.add_widget( forecastTomoHeading )
+		thermostatUI.add_widget( forecastTomoImg )
+		thermostatUI.add_widget( forecastTomoDetailsLabel )
+		thermostatUI.add_widget( forecastTomoSummaryLabel )
+
+		layout = thermostatUI
+
+		# Minimap UI initialization
+
+		if minUIEnabled:
+			uiScreen 	= Screen( name="thermostatUI" )
+			uiScreen.add_widget( thermostatUI )
+
+			minScreen 	= MinimalScreen( name="minimalUI" )
+			minUI 		= FloatLayout( size=( 800, 480 ) )
+
+			with minUI.canvas.before:
+				Color( 0.0, 0.0, 0.0, 1 )
+				self.rect = Rectangle( size=( 800, 480 ), pos=minUI.pos )
+
+			altCurLabel.pos = ( 390, 290 )
+			minUI.add_widget( altCurLabel )
+			minScreen.add_widget( minUI )
+
+			screenMgr = ScreenManager( transition=NoTransition() )		# FadeTransition seems to have OpenGL bugs in Kivy Dev 1.9.1 and is unstable, so sticking with no transition for now
+			screenMgr.add_widget ( uiScreen )
+			screenMgr.add_widget ( minScreen )
+
+			layout = screenMgr
+
+			minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout )
+
+			if pirEnabled:
+				Clock.schedule_interval( check_pir, pirCheckInterval )
+
+
+		# Start checking the temperature
+		Clock.schedule_interval( check_sensor_temp, tempCheckInterval )
+
+		# Show the current weather & forecast
+		Clock.schedule_once( display_current_weather, 5 )
+		Clock.schedule_once( display_forecast_weather, 10 )
+
+		return layout
+
+
+##############################################################################
+#                                                                            #
+#       Scheduler Implementation                                             #
+#                                                                            #
+##############################################################################
+
+def startScheduler():
+	while True:
+		if holdControl.state == "normal":
+			with scheduleLock:
+				schedule.run_pending()
+
+		time.sleep( 10 )
+
+
+def setScheduledTemp( temp ):
+	with thermostatLock:
+		global setTemp
+		if holdControl.state == "normal":
+			setTemp = temp
+			setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
+			tempSlider.value = setTemp
+			if debug: print( "   setScheduledTemp Called:     " + str( temp ) )
+
+
+def getTestSchedule():
+	days = [ "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday" ]
+	testSched = {}
+	
+	for i in range( len( days ) ):
+		tempList = []
+		for minute in range( 60 * 24 ):
+			hrs, mins = divmod( minute, 60 )
+			tempList.append( [
+								str( hrs ).rjust( 2, '0' ) + ":" + str( mins ).rjust( 2, '0' ),
+								float( i + 1 ) / 10.0 + ( ( 19.0 if tempScale == "metric" else 68.0 ) if minute % 2 == 1 else ( 22.0 if tempScale == "metric" else 72.0 ) )
+						   ] )
+
+		testSched[ days[i] ] = tempList
+
+	return testSched
+
+
+def reloadSchedule():
+	with scheduleLock:
+		schedule.clear()
+
+		activeSched = None
+
+		with thermostatLock:
+			thermoSched = JsonStore( "thermostat_schedule.json" )
+	
+			if holdControl.state != "down":
+				if heatControl.state == "down":
+					activeSched = thermoSched[ "heat" ]  
+				elif coolControl.state == "down":
+					activeSched = thermoSched[ "cool" ]  
+
+				if useTestSchedule: 
+					activeSched = getTestSchedule()
+					print "Using Test Schedule!!!"
+	
+		if activeSched != None:
+			for day, entries in activeSched.iteritems():
+				for i, entry in enumerate( entries ):
+					getattr( schedule.every(), day ).at( entry[ 0 ] ).do( setScheduledTemp, entry[ 1 ] )
+					if debug: print "Schedule Set: " + day + ", at: " + entry[ 0 ] + " = " + str( entry[ 1 ] ) + scaleUnits
+
+
+##############################################################################
+#                                                                            #
+#       Web Server Interface                                                 #
+#                                                                            #
+##############################################################################
+
+class WebInterface( object ):
+
+	@cherrypy.expose
+	def index( self ):		
+		file = open( "web/html/thermostat.html", "r" )
+
+		html = file.read()
+
+		file.close()
+
+		with thermostatLock:
+			html = html.replace( "@@temp@@", str( setTemp ) )
+			html = html.replace( "@@current@@", str( currentTemp ) + scaleUnits )
+			html = html.replace( "@@minTemp@@", str( minTemp ) )
+			html = html.replace( "@@maxTemp@@", str( maxTemp ) )
+			html = html.replace( "@@tempStep@@", str( tempStep ) )
+
+		
+			status = statusLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ).replace( "\n", "<br>" ).replace( " ", "&nbsp;" )
+			status = status.replace( "[color=00ff00]", '<font color="red">' ).replace( "[/color]", '</font>' ) 
+	
+			html = html.replace( "@@status@@", status )
+			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@heatChecked@@", "checked" if heatControl.state == "down" else "" )
+			html = html.replace( "@@coolChecked@@", "checked" if coolControl.state == "down" else "" )
+			html = html.replace( "@@fanChecked@@", "checked" if fanControl.state == "down" else "" )
+			html = html.replace( "@@holdChecked@@", "checked" if holdControl.state == "down" else "" )
+	
+		return html
+
+
+	@cherrypy.expose
+	def set( self, temp, heat="off", cool="off", fan="off", hold="off" ):
+		global setTemp
+		global setLabel
+		global heatControl
+		global coolControl
+		global fanControl
+
+		tempChanged = setTemp != float( temp )
+
+		with thermostatLock:
+			setTemp = float( temp )
+			setLabel.text = "  Set\n[b]" + str( setTemp ) + "c[/b]"
+			tempSlider.value = setTemp
+
+			if heat == "on":
+				setControlState( heatControl, "down" )
+			else:
+				setControlState( heatControl, "normal" )
+
+			if cool == "on":
+				setControlState( coolControl, "down" )
+			else:
+				setControlState( coolControl, "normal" )
+
+			if fan == "on":
+				setControlState( fanControl, "down" )
+			else:
+				setControlState( fanControl, "normal" )
+
+			if hold == "on":
+				setControlState( holdControl, "down" )
+			else:
+				setControlState( holdControl, "normal" )
+
+			reloadSchedule()
+
+		file = open( "web/html/thermostat_set.html", "r" )
+
+		html = file.read()
+
+		file.close()
+		
+		with thermostatLock:
+			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@temp@@", ( '<font color="red"><b>' if tempChanged else "" ) + str( setTemp ) + ( '</b></font>' if tempChanged else "" ) )
+			html = html.replace( "@@heat@@", ( '<font color="red"><b>' if heat == "on" else "" ) + heat + ( '</b></font>' if heat == "on" else "" ) )
+			html = html.replace( "@@cool@@", ( '<font color="red"><b>' if cool == "on" else "" ) + cool + ( '</b></font>' if cool == "on" else "" ) )
+			html = html.replace( "@@fan@@",  ( '<font color="red"><b>' if fan == "on" else "" ) + fan + ( '</b></font>' if fan == "on" else "" ) )
+			html = html.replace( "@@hold@@", ( '<font color="red"><b>' if hold == "on" else "" ) + hold + ( '</b></font>' if hold == "on" else "" ) )
+
+		return html
+
+
+	@cherrypy.expose
+	def schedule( self ):		
+		file = open( "web/html/thermostat_schedule.html", "r" )
+
+		html = file.read()
+
+		file.close()
+		
+		with thermostatLock:
+			html = html.replace( "@@minTemp@@", str( minTemp ) )
+			html = html.replace( "@@maxTemp@@", str( maxTemp ) )
+			html = html.replace( "@@tempStep@@", str( tempStep ) )
+		
+			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+	
+		return html
+
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	def save( self ):
+		schedule = cherrypy.request.json
+
+		with scheduleLock:
+			file = open( "thermostat_schedule.json", "w" )
+
+			file.write( json.dumps( schedule, indent = 4 ) )
+		
+			file.close()
+
+		reloadSchedule()
+
+		file = open( "web/html/thermostat_saved.html", "r" )
+
+		html = file.read()
+
+		file.close()
+		
+		with thermostatLock:
+			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+		
+		return html
+
+
+def startWebServer():
+	host = "discover" if not( settings.exists( "web" ) ) else settings.get( "web" )[ "host" ]
+	cherrypy.server.socket_host = host if host != "discover" else get_ip_address()								# use machine IP address if host = "discover"
+	cherrypy.server.socket_port = 80 if not( settings.exists( "web" ) ) else settings.get( "web" )[ "port" ]
+
+	conf = {
+		'/': {
+			'tools.staticdir.root': os.path.abspath( os.getcwd() ),
+			'tools.staticfile.root': os.path.abspath( os.getcwd() )
+		},
+		'/css': {
+			'tools.staticdir.on': True,
+			'tools.staticdir.dir': './web/css'
+		},
+		'/javascript': {
+			'tools.staticdir.on': True,
+			'tools.staticdir.dir': './web/javascript'
+		},
+		'/images': {
+			'tools.staticdir.on': True,
+			'tools.staticdir.dir': './web/images'
+		},
+		'/schedule.json': {
+			'tools.staticfile.on': True,
+			'tools.staticfile.filename': './thermostat_schedule.json'
+		},
+		'/favicon.ico': {
+			'tools.staticfile.on': True,
+			'tools.staticfile.filename': './web/images/favicon.ico'
+		}
+
+	}
+
+	cherrypy.config.update(
+		{ 'log.screen': debug,
+		  'log.access_file': "",
+		  'log.error_file': ""
+		}
+	)
+
+	cherrypy.quickstart ( WebInterface(), '/', conf )
+
+
+##############################################################################
+#                                                                            #
+#       Main                                                                 #
+#                                                                            #
+##############################################################################
+
+def main():
+	# Start Web Server
+	webThread = threading.Thread( target=startWebServer )
+	webThread.daemon = True
+	webThread.start()
+
+	# Start Scheduler
+	reloadSchedule()
+	schedThread = threading.Thread( target=startScheduler )
+	schedThread.daemon = True
+	schedThread.start()
+
+	# Start Thermostat UI/App
+	ThermostatApp().run()
+
+
+if __name__ == '__main__':
+	try:
+		main()
+	finally:
+		GPIO.cleanup()
+

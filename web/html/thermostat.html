@@ -1,0 +1,130 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta id="viewport" name="viewport" content="initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Thermostat Web Interface</title>
+  <link href="/images/Apple_ThermostatIcon_120x120.png" rel="apple-touch-icon" sizes="120x120" />
+  <link href="/images/Apple_ThermostatIcon_152x152.png" rel="apple-touch-icon" sizes="152x152" />
+  <link href="/images/Apple_ThermostatIcon_180x180.png" rel="apple-touch-icon" sizes="180x180" />
+
+  <link rel="stylesheet" href="/css/jquery-ui.min.css">
+  <script src="/javascript/jquery-1.11.3.min.js"></script>
+  <script src="/javascript/jquery-ui.min.js"></script>
+  <script src="/javascript/jquery.ui.touch-punch.min.js"></script>
+ <script>
+  $(function() {
+	$( "#slider-vertical" ).slider({
+	  orientation: "vertical",
+	  range: "min",
+	  min: @@minTemp@@,
+	  max: @@maxTemp@@,
+	  step: @@tempStep@@,
+	  value: "@@temp@@",
+	  slide: function( event, ui ) {
+		$( "#temp" ).val( ui.value.toFixed( 1 ) );
+	  }
+	});
+	$( "#temp" ).val( $( "#slider-vertical" ).slider( "value" ).toFixed( 1 ) );
+
+	$( "input[type=checkbox]" ).each(function(){
+	  if( label = $( "label[for=" + $(this).attr('id') + "]" ) ) {
+		$(this).hide();
+		label.prepend( "" );
+		label.addClass( 'button' + ($(this).is( ":checked" ) ? ' checked' : '' ) );
+		label.hover( function(){ $(this).toggleClass( 'hover' ); });
+		label.click(function(){
+		  $(this).toggleClass( 'checked' );
+		  $( "input[id=" + $(this).attr('for') + "]" ).click( function(){ $(this).attr( "checked" ); });
+		  relatedId = $(this).attr( "related" )
+		  if( relatedId && $( "input[id=" + relatedId + "]" ).is( ":checked" ) ) {
+			  $( "label[for=" + relatedId + "]" ).removeClass( "checked" );
+			  $( "input[id=" + relatedId + "]" ).removeAttr( "checked" );
+		  }
+		});
+	  } 
+	});
+  });
+  </script>
+  <style>
+	label.button {
+	  	display:inline-block; padding:4px 10px; margin:0px 2px 2px 0px;
+	  	color:#666; text-align:center; font-size:13px; line-height:20px;
+	  	background-color:#FFF;  border: 1px solid #000; cursor:pointer;
+	  	-webkit-border-radius:5px; -moz-border-radius:5px; border-radius:5px;
+	}
+	label.button.hover { box-shadow:2px 2px 2px #333; }
+	label.button.checked.red { color:#000; background-color:#FF0000;  }
+	label.button.checked.green { color:#000; background-color:#00FF00;  }
+	label.button.checked.blue { color:#000; background-color:#3399FF;  }
+	label.button span {
+	  	display:inline-block; width:10px; height:10px; margin-right:4px;	
+	}
+  </style>
+</head>
+<body>
+	<div align="center">
+		<form method="post" action="set">
+		  	<table width="360px">
+				<tr>
+					<td width="40%" align="center"><img src="/images/logo.png" width="50px" height="50px">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+					<td align="center"><b>Thermostat</b><br><br>@@dt@@</td>
+				</tr>
+				<tr>
+					<td valign="top">
+						<br>
+						<p><b><span style="font-size:large">Temp: @@current@@</span></b></p>
+						<p>@@status@@</p>
+						<br>
+						<br>
+						<p><input type="submit" value="Edit Schedule" onclick="window.location = 'schedule'; return false;" /></p>
+					</td>
+					<td align="center">
+						 <table width="100%">
+							<tr>
+								<td align="center" valign="center" width="33%">
+									<label for="heatButton" related="coolButton" class="red">Heat</label>
+									<input type="checkbox" id="heatButton" related="coolButton" name="heat" value="on" @@heatChecked@@/>
+								</td>
+								<td rowspan="3" align="center" width="33%">
+									<div id="slider-vertical" style="height:200px;"></div>
+								</td>
+								<td align="center" valign="center" width="33%">
+									<label for="holdButton" class="green">Hold</label>
+									<input type="checkbox" id="holdButton" name="hold" value="on" @@holdChecked@@/>
+								</td>
+							</tr>
+							<tr>
+								<td align="center" valign="center" width="33%">
+									<label for="coolButton" related="heatButton" class="blue">Cool</label>
+									<input type="checkbox" id="coolButton" related="heatButton" name="cool" value="on" @@coolChecked@@/>
+								</td>	
+								<td rowspan="2" align="center" valign="top" width="33%">
+									<br>
+									<input type="text" id="temp" name="temp" readonly style="border:0; color:#ff0000; font-weight:bold; font-size:x-large; width: 2.3em;" size="4">
+								</td>						
+							</tr>
+							<tr>
+								<td align="center" valign="center" width="33%">
+									<label for="fanButton" class="green" >Fan</label>
+									<input type="checkbox" id="fanButton" name="fan" value="on" @@fanChecked@@/>
+								</td>							
+							</tr>
+							<tr>	
+								<td>						
+								<td align="center">
+									<br>
+									<input type="submit" value="Set">
+								</td>
+								<td/>	
+							</tr>
+						  </table>
+					</td>
+				</tr>			
+		  	</table>	  
+		</form>
+	</div>
+</body>
+</html>

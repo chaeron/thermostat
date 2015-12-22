@@ -1,0 +1,42 @@
+{
+    "calibration": {
+        "boilingMeasured": 99.098043,
+        "elevation": 269,
+        "freezingMeasured": 0.01
+    },
+    "scale": {
+        "tempScale": "metric"
+    },
+    "state": {
+        "coolControl": "normal",
+        "fanControl": "normal",
+        "heatControl": "normal",
+        "holdControl": "normal",
+        "setTemp": 22.0
+    },
+    "thermostat": {
+        "coolPin": 18,
+        "fanPin": 25,
+        "heatPin": 23,
+        "maxTemp": 30.0,
+        "minTemp": 15.0,
+        "minUIEnabled": 1,
+        "minUITimeout": 60,
+        "pirEnabled": 1,
+        "pirPin": 5,
+        "tempCheckInterval": 3,
+        "tempHysteresis": 0.5,
+        "tempStep": 0.5
+    },
+    "weather": {
+        "appkey": "your openweathermap.org appkey",
+        "forecastRefreshInterval": 60,
+        "location": "Barrie,ca",
+        "weatherExceptionInterval": 5,
+        "weatherRefreshInterval": 10
+    },
+    "web": {
+        "host": "discover",
+        "port": 80
+    }
+}
