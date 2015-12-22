@@ -138,6 +138,8 @@ You need sudo since the code accesses the Pi GPIO pins, which requires root priv
 To have the thermostat code start automatically at boot time, copy the resources/thermostat.desktop file into /home/pi/.config/autostart/. This assumes that you have put
 the thermostat code in /home/pi/thermostat. If you have the code elsewhere then edit thermostat.desktop and thermostat.sh to point to where you have the code.
 
+To access the Web-based interface to control the thermostat and change the schedule, just point your favourite browser at the IP address that your Pi board is set to. For example, the author's thermostat is on 10.66.66.30, so entering http://10.66.66.30 will bring up the web interface. The Web Interface is touch sensitive on IOS devices. If you bring up the Web Interface on Safari on an IOS device (iPhone/iPad), you can save it to your home page, and it will use a nice thermostat icon.
+
 
 ##Security/Authentication:
 
@@ -168,8 +170,7 @@ And finally, thanks to [Nich Fugal/Makeatronics](http://makeatronics.blogspot.co
 1. Default temperatures are in degrees Celcius, a righteous metric scale. If you wish to configure the thermostat to use the Farenheit system, you will need to replace 
    the .json config files with those in the resources/farenheit directory.
 
-2. Future versions may include smart capabilities supporting motion sensors, remote wireless temperature sensors, logging/analysis, security/authentication
-   and more. But don't hold your breath...
+2. Future versions may include smart capabilities supporting remote wireless temperature sensors, logging/analysis, security/authentication and more. But don't hold your breath...
 
 3. Feel free to hack the code, so long as you credit the source. It is assumed that if you do, you have some familiarity with programming, python, web coding and the like.
 
