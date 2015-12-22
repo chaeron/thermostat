@@ -45,6 +45,20 @@ Key features include:
 **Note**: *Double click/tap on a blank space in the schedule to create a new entry*
 
 
+**Thermostat Hardware - Internals:**
+
+![Thermostat Hardware - Internals](resources/thermostat_interior.jpg)
+
+The author's final internals, before the case top was installed. Green board closest to the bottom of the photo is the Raspberry Pi 2 computer. Red board is a custom prototyping board that was used to interface the temperature sensor, motion sensor and tie into the relay boards. The two green boards are the relay boards that actually switch the HVAC lines. The small blue board on top is a battery charging controller, with the LiPo battery in gold on the lower right.
+
+
+**Thermostat Installation:**
+
+![Thermostat Installation](resources/thermostat_installed.jpg)
+
+The new Pi thermostat in it's custom wood enclosure. mounted on the wall in the author's hallway. Motion sensor is on the right side. You can also see the temperature sensor to the right of the motion sensor....it has be be outside the case, since the Pi computer generates enough heat that it would affect the measurement if the temp sensor was inside.
+
+
 ##Hardware (as used/tested by author):
 
 	- Raspberry Pi 2 Model B
