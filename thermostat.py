@@ -762,7 +762,7 @@ def setScheduledTemp( temp ):
 	with thermostatLock:
 		global setTemp
 		if holdControl.state == "normal":
-			setTemp = temp
+			setTemp = round( temp, 1 )
 			setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
 			tempSlider.value = setTemp
 			if debug: print( "   setScheduledTemp Called:     " + str( temp ) )
