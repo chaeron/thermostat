@@ -275,7 +275,13 @@ altCurLabel	 = Label( text=currentLabel.text, size_hint = ( None, None ), font_s
 
 setLabel     = Label( text="  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]", size_hint = ( None, None ), font_size='25sp', markup=True, text_size=( 100, 100 ) )
 statusLabel  = Label( text=get_status_string(), size_hint = ( None, None ),  font_size='20sp', markup=True, text_size=( 140, 130 ) )
-dtLabel		 = Label( text="[b]" + time.strftime("% a%b %d, %Y, %I:%M %p") + "[/b]", size_hint = ( None, None ), font_size='20sp', markup=True, text_size=( 270, 40 ) )
+
+dateLabel	 = Label( text="[b]" + time.strftime("%a %b %d, %Y") + "[/b]", size_hint = ( None, None ), font_size='20sp', markup=True, text_size=( 270, 40 ) )
+
+timeStr		 = time.strftime("%I:%M %p").lower()
+
+timeLabel	 = Label( text="[b]" + ( timeStr if timeStr[0:1] != "0" else timeStr[1:] ) + "[/b]", size_hint = ( None, None ), font_size='40sp', markup=True, text_size=( 180, 75 ) )
+altTimeLabel = Label( text=timeLabel.text, size_hint = ( None, None ), font_size='40sp', markup=True, text_size=( 180, 75 ), color=( 0.4, 0.4, 0.4, 0.2 ) )
 
 tempSlider 	 = Slider( orientation='vertical', min=minTemp, max=maxTemp, step=tempStep, value=setTemp, size_hint = ( None, None ) )
 
@@ -543,7 +549,14 @@ def check_sensor_temp( dt ):
 
 		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
 		altCurLabel.text  = currentLabel.text
-		dtLabel.text      = "[b]" + time.strftime("%a %b %d, %Y, %I:%M %p") + "[/b]"
+
+		dateLabel.text      = "[b]" + time.strftime("%a %b %d, %Y") + "[/b]"
+
+		timeStr		 = time.strftime("%I:%M %p").lower()
+
+		timeLabel.text      = ( "[b]" + ( timeStr if timeStr[0:1] != "0" else timeStr[1:] ) + "[/b]" ).lower()
+		altTimeLabel.text  	= timeLabel.text
+
 		change_system_settings()
 
 
@@ -652,16 +665,17 @@ class ThermostatApp( App ):
 		statusLabel.pos = ( 670, 40 )
 
 		tempSlider.size  = ( 100, 360 )
-		tempSlider.pos = ( 560, 20 )
+		tempSlider.pos = ( 570, 20 )
 
 		holdControl.size  = ( 80, 80 )
-		holdControl.pos = ( 460, 380 )
+		holdControl.pos = ( 480, 380 )
 
-		setLabel.pos = ( 580, 390 )
+		setLabel.pos = ( 590, 390 )
 
 		currentLabel.pos = ( 390, 290 )
 
-		dtLabel.pos = ( 180, 370 )
+		dateLabel.pos = ( 180, 370 )
+		timeLabel.pos = ( 335, 380 )
 
 		weatherImg.pos = ( 265, 160 )
 		weatherSummaryLabel.pos = ( 430, 160 )
@@ -689,7 +703,8 @@ class ThermostatApp( App ):
 		thermostatUI.add_widget( currentLabel )
 		thermostatUI.add_widget( setLabel )
 		thermostatUI.add_widget( statusLabel )
-		thermostatUI.add_widget( dtLabel )
+		thermostatUI.add_widget( dateLabel )
+		thermostatUI.add_widget( timeLabel )
 		thermostatUI.add_widget( weatherImg )
 		thermostatUI.add_widget( weatherSummaryLabel )
 		thermostatUI.add_widget( weatherDetailsLabel )
@@ -718,7 +733,10 @@ class ThermostatApp( App ):
 				self.rect = Rectangle( size=( 800, 480 ), pos=minUI.pos )
 
 			altCurLabel.pos = ( 390, 290 )
+			altTimeLabel.pos = ( 335, 380 )
+
 			minUI.add_widget( altCurLabel )
+			minUI.add_widget( altTimeLabel )
 			minScreen.add_widget( minUI )
 
 			screenMgr = ScreenManager( transition=NoTransition() )		# FadeTransition seems to have OpenGL bugs in Kivy Dev 1.9.1 and is unstable, so sticking with no transition for now
@@ -840,7 +858,7 @@ class WebInterface( object ):
 			status = status.replace( "[color=00ff00]", '<font color="red">' ).replace( "[/color]", '</font>' ) 
 	
 			html = html.replace( "@@status@@", status )
-			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 			html = html.replace( "@@heatChecked@@", "checked" if heatControl.state == "down" else "" )
 			html = html.replace( "@@coolChecked@@", "checked" if coolControl.state == "down" else "" )
 			html = html.replace( "@@fanChecked@@", "checked" if fanControl.state == "down" else "" )
@@ -893,7 +911,7 @@ class WebInterface( object ):
 		file.close()
 		
 		with thermostatLock:
-			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 			html = html.replace( "@@temp@@", ( '<font color="red"><b>' if tempChanged else "" ) + str( setTemp ) + ( '</b></font>' if tempChanged else "" ) )
 			html = html.replace( "@@heat@@", ( '<font color="red"><b>' if heat == "on" else "" ) + heat + ( '</b></font>' if heat == "on" else "" ) )
 			html = html.replace( "@@cool@@", ( '<font color="red"><b>' if cool == "on" else "" ) + cool + ( '</b></font>' if cool == "on" else "" ) )
@@ -916,7 +934,7 @@ class WebInterface( object ):
 			html = html.replace( "@@maxTemp@@", str( maxTemp ) )
 			html = html.replace( "@@tempStep@@", str( tempStep ) )
 		
-			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 	
 		return html
 
@@ -941,7 +959,7 @@ class WebInterface( object ):
 		file.close()
 		
 		with thermostatLock:
-			html = html.replace( "@@dt@@", dtLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
+			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 		
 		return html
 
