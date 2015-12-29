@@ -153,7 +153,7 @@ security/authentication controls for your thermostat, you will have to implement
 The Minimal UI (screensaver) mode is enabled by default. This mode will just show the current temperature, greyed out after a specified timeout. To restore the full UI, just touch the screen anywhere. You can disable this in the in the thermostat_settings.json file. Default timeout to display the minimal UI is 1 minute, and can be changed in the in the settings file as well.
 
 You can optionally attach a PIR motion sensor and use that to switch back to full UI mode when motion is detected. Use of a PIR sensor is disabled by default. You can enable the PIR sensor in the thermostat_settings.json file.
-If you are using the PIR Motion Sensor, you can also specify a From/To time range (HH:MM for each) during which you wish to ignore any sensed motion, in effect, making you touch the screen to show the full UI. Default settings are not to ignore the PIR Motion Sensor ever (eg. From/To both set to "00:00").  This was a feature request from the wife, so that the display would not switch to the full UI in the wee hours when she gets up to go to the bathroom. 
+If you are using the PIR Motion Sensor, you can also specify a From/To time range (HH:MM for each) during which you wish to ignore any sensed motion, in effect, making you touch the screen to show the full UI during the specified time period. Default settings are not to ignore the PIR Motion Sensor ever (eg. From/To both set to "00:00").  This was a feature request from the boss (wife!), so that the display would not switch to the full UI in the wee hours when she gets up to go to the bathroom. 
 
 
 ##Credits
@@ -175,8 +175,7 @@ And finally, thanks to [Nich Fugal/Makeatronics](http://makeatronics.blogspot.co
 
 3. Feel free to hack the code, so long as you credit the source. It is assumed that if you do, you have some familiarity with programming, python, web coding and the like.
 
-4. You are welcome to ask questions about the implementation and to offer suggestions to the author. I may or may not reply, depending on how busy I am, whether your
-   question/suggestion is deemed stoopid, irrelevant, etc. Do NOT ask novice programming/config/setup questions...those will definitely be ignored and/or flagged as spam. ;-)
+4. You are welcome to ask questions about the implementation and to offer suggestions to the author. 
 
 
 Enjoy!
