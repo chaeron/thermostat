@@ -7,6 +7,13 @@
     "scale": {
         "tempScale": "imperial"
     },
+	"state": {
+        "coolControl": "normal",
+        "fanControl": "normal",
+        "heatControl": "normal",
+        "holdControl": "normal",
+        "setTemp": 21.0
+    },
     "thermostat": {
         "coolPin": 18,
         "fanPin": 25,
@@ -23,8 +30,8 @@
         "pirEnabled": 1,
         "pirPin": 5,
         "pirCheckInterval": 0.5,
-        "pirDisableFrom": "23:30",
-        "pirDisableTo": "08:30"
+        "pirIgnoreFrom": "00:00",
+        "pirIgnoreTo": "00:00"
 	},
     "weather": {
         "appkey": "your openweathermap.org appkey",

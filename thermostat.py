@@ -33,6 +33,7 @@ import threading
 import math
 import os, os.path
 import time
+import datetime
 import urllib2
 import json
 import random
@@ -171,16 +172,29 @@ try:
 except:
 	tempSensor = None
 
-# GPIO Pin setup and utility routines:
 
-coolPin		 		= 18 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "coolPin" ]
-heatPin 			= 23 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "heatPin" ]
-fanPin  			= 25 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "fanPin" ]
+# PIR (Motion Sensor) setup:
 
 pirEnabled 			= 0 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirEnabled" ]
 pirPin  			= 5 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirPin" ]
 
 pirCheckInterval 	= 0.5 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirCheckInterval" ]
+
+pirIgnoreFromStr	= "00:00" if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirIgnoreFrom" ]
+pirIgnoreToStr		= "00:00" if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirIgnoreTo" ]
+
+pirIgnoreFrom		= datetime.time( int( pirIgnoreFromStr.split( ":" )[ 0 ] ), int( pirIgnoreFromStr.split( ":" )[ 1 ] ) )
+pirIgnoreTo			= datetime.time( int( pirIgnoreToStr.split( ":" )[ 0 ] ), int( pirIgnoreToStr.split( ":" )[ 1 ] ) )
+
+if debug:
+	print( "Ignoring Motion Sensor from " + pirIgnoreFrom.strftime("%I:%M %p").lower() + ", to " + pirIgnoreTo.strftime("%I:%M %p").lower() )
+
+
+# GPIO Pin setup and utility routines:
+
+coolPin		 		= 18 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "coolPin" ]
+heatPin 			= 23 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "heatPin" ]
+fanPin  			= 25 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "fanPin" ]
 
 GPIO.setmode( GPIO.BCM )
 GPIO.setup( coolPin, GPIO.OUT )
@@ -581,7 +595,17 @@ def check_pir( pin ):
 
 			minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout ) 
 
-			if screenMgr.current == "minimalUI":
+			ignore = False
+			now = datetime.datetime.now().time()
+			
+			if pirIgnoreFrom > pirIgnoreTo:
+				if now >= pirIgnoreFrom or now < pirIgnoreTo:
+					ignore = True
+			else:
+				if now >= pirIgnoreFrom and now < pirIgnoreTo:
+					ignore = True
+
+			if screenMgr.current == "minimalUI" and not( ignore ):
 			   screenMgr.current = "thermostatUI"
 
 			if debug:
