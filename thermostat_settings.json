@@ -12,7 +12,7 @@
         "fanControl": "normal",
         "heatControl": "normal",
         "holdControl": "normal",
-        "setTemp": 22.0
+        "setTemp": 21.0
     },
     "thermostat": {
         "coolPin": 18,
@@ -22,12 +22,17 @@
         "minTemp": 15.0,
         "minUIEnabled": 1,
         "minUITimeout": 60,
-        "pirEnabled": 1,
-        "pirPin": 5,
         "tempCheckInterval": 3,
         "tempHysteresis": 0.5,
         "tempStep": 0.5
     },
+    "pir": {
+        "pirEnabled": 1,
+        "pirPin": 5,
+        "pirCheckInterval": 0.5,
+        "pirDisableFrom": "23:30",
+        "pirDisableTo": "08:30"
+	},
     "weather": {
         "appkey": "your openweathermap.org appkey",
         "forecastRefreshInterval": 60,

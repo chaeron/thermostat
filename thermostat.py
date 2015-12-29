@@ -177,10 +177,10 @@ coolPin		 		= 18 if not( settings.exists( "thermostat" ) ) else settings.get( "t
 heatPin 			= 23 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "heatPin" ]
 fanPin  			= 25 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "fanPin" ]
 
-pirEnabled 			= 0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "pirEnabled" ]
-pirPin  			= 5 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "pirPin" ]
+pirEnabled 			= 0 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirEnabled" ]
+pirPin  			= 5 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirPin" ]
 
-pirCheckInterval 	= 0.5		# Check for motion on the PIR sensor every 1/2 second, if enabled
+pirCheckInterval 	= 0.5 if not( settings.exists( "pir" ) ) else settings.get( "pir" )[ "pirCheckInterval" ]
 
 GPIO.setmode( GPIO.BCM )
 GPIO.setup( coolPin, GPIO.OUT )

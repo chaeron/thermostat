@@ -15,12 +15,17 @@
         "minTemp": 50.0,
         "minUIEnabled": 1,
         "minUITimeout": 60,
-        "pirEnabled": 0,
-        "pirPin": 5,
         "tempCheckInterval": 3,
         "tempHysteresis": 1.0,
         "tempStep": 1.0
     },
+    "pir": {
+        "pirEnabled": 1,
+        "pirPin": 5,
+        "pirCheckInterval": 0.5,
+        "pirDisableFrom": "23:30",
+        "pirDisableTo": "08:30"
+	},
     "weather": {
         "appkey": "your openweathermap.org appkey",
         "forecastRefreshInterval": 60,
