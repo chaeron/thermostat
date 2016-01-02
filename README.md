@@ -145,7 +145,7 @@ To access the Web-based interface to control the thermostat and change the sched
 
 This implementation assumes that your Pi Thermotstat is on a private, access controlled, local wifi network, and is not accessible over the internet. As such, there
 is no security implemented for the web interface. Anyone with access to the wifi network will be able to control your thermostat! If you want/need more stringent
-security/authentication controls for your thermostat, you will have to implement them yourself. TBD, who
+security/authentication controls for your thermostat, you will have to implement them yourself for now.
 
 
 ##Minimal UI (screensaver) mode: 
