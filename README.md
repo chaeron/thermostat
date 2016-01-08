@@ -206,7 +206,7 @@ And finally, thanks to [Nich Fugal/Makeatronics](http://makeatronics.blogspot.co
 1. Default temperatures are in degrees Celcius, a righteous metric scale. If you wish to configure the thermostat to use the Farenheit system, you will need to replace 
    the .json config files with those in the resources/farenheit directory.
 
-2. Future versions may include smart capabilities supporting remote wireless temperature sensors, logging/analysis, security/authentication and more. But don't hold your breath...
+2. Future versions may include smart capabilities supporting remote wireless temperature sensors, log analysis, security/authentication and more. But don't hold your breath...
 
 3. Feel free to hack the code, so long as you credit the source. It is assumed that if you do, you have some familiarity with programming, python, web coding and the like.
 
