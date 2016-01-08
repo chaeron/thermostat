@@ -188,7 +188,7 @@ The thermostat code supports logging to a remote MQTT broker/server (if you enab
 
 If you want to use remote logging to a MQTT broker/server, do a "sudo pip install paho-mqtt" to install the required client libraries, and configure MQTT settings in thermostat_settings.json to enable MQTT and point to your remote MQTT broker/server instance. The author is running the mosquitto MQTT broker on a separate Raspberry Pi for this purpose.
 
-Down the road, functionality will be added to use MQTT to forward remote sensor readings back to the thermostat (eg. multiple, remote battery-powered temperatures/humidity/pressure sensors that can be placed in various rooms in the house).
+Down the road, functionality will be added to use MQTT to forward remote sensor readings back to the thermostat (eg. multiple, remote battery-powered, wireless temperature/humidity/pressure sensors that can be placed in various rooms in the house).
 
 
 ##Credits
