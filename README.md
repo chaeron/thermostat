@@ -86,6 +86,7 @@ The new Pi thermostat in it's custom wood enclosure. mounted on the wall in the 
 	    - CherryPy (web server)
 	    - schedule (for scheduled events)
 	    - openweathermap.org app key 
+	    - Optional: MQTT client library (paho-mqtt, for remote logging and sensor support) 
 		
 
 ##Software installation:
