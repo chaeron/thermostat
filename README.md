@@ -25,6 +25,7 @@ Key features include:
     8. Supports calibration of your temperature sensor
 	9. Minimal UI (screensaver) mode
 	10. PIR Motion sensor to switch from minimal to full UI mode (optional)
+	11. Detailed logging with selectable levels, including optional remote logging to a MQTT broker/server
 
 ###Thermostat User Interface
 
@@ -94,6 +95,7 @@ The new Pi thermostat in it's custom wood enclosure. mounted on the wall in the 
 	3. Install additional python packages: CherryPy, schedule & w1thermsensor using the command "sudo pip install ..."
 	4. Get an openweathermap.org app key if you don't have one from here: http://www.openweathermap.org/appid
 	5. Edit the thermostat_settings.json file and insert your Open Weather Map app key in the appropriate spot. Also change the location to your location.
+	6. If you want to use remote logging to a MQTT broker/server, do a "sudo pip install paho-mqtt" to install the required client libraries, and enable/configure MQTT settings in thermostat_settings.json	
 
 
 ##Hardware Configuration:
@@ -154,6 +156,38 @@ The Minimal UI (screensaver) mode is enabled by default. This mode will just sho
 
 You can optionally attach a PIR motion sensor and use that to switch back to full UI mode when motion is detected. Use of a PIR sensor is disabled by default. You can enable the PIR sensor in the thermostat_settings.json file.
 If you are using the PIR Motion Sensor, you can also specify a From/To time range (HH:MM for each) during which you wish to ignore any sensed motion, in effect, making you touch the screen to show the full UI during the specified time period. Default settings are not to ignore the PIR Motion Sensor ever (eg. From/To both set to "00:00").  This was a feature request from the boss (wife!), so that the display would not switch to the full UI in the wee hours when she gets up to go to the bathroom. 
+
+
+##Logging:
+
+This implementation is fully instrumented with logging capabilities. Logging channel (destination) and level are set in the thermostat_settings.json file.
+
+Available logging channels include:
+
+	none  - no logging
+	file  - log to thermostat.log file (default)
+	print - log to sysout
+	mqtt  - log to a remote MQTT server/broker (mqtt settings must be set up in thermostat_settings.json file)
+
+Logging levels include:
+
+	error - Only log error conditions
+	state - Log thermostat state changes only (eg. temperature change, system status changes, etc.) (default)
+	info  - Log detailed information/settings (this logs a lot of information!)
+	debug - Log debug information (this logs a lot of stuff!)
+
+Each logging level includes those above it in the list, for example: info level logging also enables state and error logging entries. 
+
+Default logging is set to log to a file with level: state.
+
+
+##MQTT Support:
+
+The thermostat code supports logging to a remote MQTT broker/server (if you enable/configure MQTT and also set logging to use mqtt as the channel). This was implemented to allow for tracking of thermostat operation and conditions on a remote server, to enable more detailed analysis/tuning of thermostat/HVAC system performance. For example, log entries could be saved to a mySQL (or other) database, and then analyzed to determine longer term trends, system lag time (eg. how long does it take the HVAC system to bring the temperature up/down to the desired level) to allow for "smart/learning" thermostat capabilities down the road. Rather than complicate the thermostat code with such analysis, and add extra load/software on the thermostat (eg. running a mySQL DBMS on the thermostat Pi), it seemed to make more sense to farm that out to a remote machine instead.
+
+If you want to use remote logging to a MQTT broker/server, do a "sudo pip install paho-mqtt" to install the required client libraries, and configure MQTT settings in thermostat_settings.json to enable MQTT and point to your remote MQTT broker/server instance. The author is running the mosquitto MQTT broker on a separate Raspberry Pi for this purpose.
+
+Down the road, functionality will be added to use MQTT to forward remote sensor readings back to the thermostat (eg. multiple, remote battery-powered temperatures/humidity/pressure sensors that can be placed in various rooms in the house).
 
 
 ##Credits

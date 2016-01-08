@@ -95,14 +95,57 @@ from w1thermsensor import W1ThermSensor
 
 ##############################################################################
 #                                                                            #
+#       MQTT Imports (used for logging and/or external sensors)              #
+#                                                                            #
+##############################################################################
+
+try:
+	import paho.mqtt.client as mqtt
+	mqttAvailable = True
+except ImportError:
+	mqttAvailable = False
+
+
+##############################################################################
+#                                                                            #
+#       Utility classes                                                      #
+#                                                                            #
+##############################################################################
+
+class switch(object):
+    def __init__(self, value):
+        self.value = value
+        self.fall = False
+
+    def __iter__(self):
+        """Return the match method once, then stop"""
+        yield self.match
+        raise StopIteration
+    
+    def match(self, *args):
+        """Indicate whether or not to enter a case suite"""
+        if self.fall or not args:
+            return True
+        elif self.value in args: # changed for v1.5, see below
+            self.fall = True
+            return True
+        else:
+            return False
+
+
+##############################################################################
+#                                                                            #
 #       Settings                                                             #
 #                                                                            #
 ##############################################################################
 
+THERMOSTAT_VERSION = "1.5"
+
 # Debug settings
 
-debug 			= False
+debug = False
 useTestSchedule = False
+
 
 # Threading Locks
 
@@ -114,6 +157,105 @@ scheduleLock   = threading.RLock()
 # Thermostat persistent settings
 
 settings = JsonStore( "thermostat_settings.json" )
+
+
+# MQTT settings
+
+def mqtt_on_connect( client, userdata, flags, rc ):
+	print( "MQTT Connected with result code: " + str( rc ) )
+
+
+if mqttAvailable:
+	mqttEnabled    		= False 		if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "enabled" ]
+	mqttClientID     	= 'thermostat' 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "clientID" ]
+	mqttServer     		= 'localhost' 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "server" ]
+	mqttPort       		= 1883 			if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "port" ]
+	mqttPubPrefix     	= "thermostat" 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "pubPrefix" ]
+else:
+	mqttEnabled    = False
+
+if mqttEnabled:
+	mqttc = mqtt.Client( mqttClientID )
+	mqttc.on_connect = mqtt_on_connect
+	mqttc.connect( mqttServer, mqttPort )
+	mqttc.loop_start()
+
+
+# Logging settings
+
+LOG_FILE_NAME = "thermostat.log"
+
+LOG_ALWAYS_TIMESTAMP = True
+
+LOG_LEVEL_DEBUG = 1
+LOG_LEVEL_INFO	= 2
+LOG_LEVEL_ERROR = 3
+LOG_LEVEL_STATE = 4
+LOG_LEVEL_NONE  = 5
+
+LOG_LEVELS = {
+	"debug": LOG_LEVEL_DEBUG,
+	"info":  LOG_LEVEL_INFO,
+	"state": LOG_LEVEL_STATE,
+	"error": LOG_LEVEL_ERROR
+}
+
+LOG_LEVELS_STR = { v: k for k, v in LOG_LEVELS.items() }
+
+logFile = None
+
+
+def log_dummy( level, category, msg, timestamp=True ):
+	pass
+
+
+def log_mqtt( level, category, msg, timestamp=True ):
+	if level >= logLevel:
+		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
+		topic = mqttPubPrefix + "/" + LOG_LEVELS_STR[ level ] + "/" + category
+		payload = ts + msg
+		mqttc.publish( topic, payload )
+		
+
+def log_file( level, category, msg, timestamp=True ):
+	if level >= logLevel:
+		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) 
+		logFile.write( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg + "\n" )
+
+
+def log_print( level, category, msg, timestamp=True ):
+	if level >= logLevel:
+		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
+		print( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg )
+
+
+loggingChannel = "none" if not( settings.exists( "logging" ) ) else settings.get( "logging" )[ "channel" ]
+loggingLevel   = "state" if not( settings.exists( "logging" ) ) else settings.get( "logging" )[ "level" ]
+
+for case in switch( loggingChannel ):
+	if case( 'none' ):
+		log = log_dummy
+		break
+	if case( 'mqtt' ):
+		if mqttEnabled:
+			log = log_mqtt
+		else:
+			log = log_dummy	
+		break
+	if case( 'file' ):
+		log = log_file
+		logFile = open( LOG_FILE_NAME, "a", 0 )
+		break
+	if case( 'print' ):
+		log = log_print
+		break
+	if case():		# default
+		log = log_dummy	
+
+logLevel = LOG_LEVELS.get( loggingLevel, LOG_LEVEL_NONE )
+
+log( LOG_LEVEL_STATE, "startup", "Thermostat Starting Up..." )
+log( LOG_LEVEL_STATE, "startup/version", THERMOSTAT_VERSION )
 
 
 # Various temperature settings:
@@ -138,6 +280,20 @@ minUIEnabled 	  = 0    if not( settings.exists( "thermostat" ) ) else settings.g
 minUITimeout 	  = 3    if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minUITimeout" ]
 minUITimer		  = None
 
+log( LOG_LEVEL_INFO, "settings/temperature/tempScale", str( tempScale ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/scaleUnits", str( scaleUnits ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/precipUnits", str( precipUnits ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/precipFactor", str( precipFactor ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/sensorUnits", str( sensorUnits ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/windFactor", str( windFactor ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/windUnits", str( windUnits ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/currentTemp", str( currentTemp ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/setTemp", str( setTemp ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/tempHysteresis", str( tempHysteresis ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/tempCheckInterval", str( tempCheckInterval ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/minUIEnabled", str( minUIEnabled ), False )
+log( LOG_LEVEL_INFO, "settings/temperature/minUITimeout", str( minUITimeout ), False )
+
 
 # Temperature calibration settings:
 
@@ -150,15 +306,13 @@ boilingMeasured   = settings.get( "calibration" )[ "boilingMeasured" ]
 freezingMeasured  = settings.get( "calibration" )[ "freezingMeasured" ]
 measuredRange	  = boilingMeasured - freezingMeasured
 
-if debug:
-	print( "Elevation:         " + str( elevation ) )
-	print( "Boiling Point:     " + str( boilingPoint ) )
-	print( "Freezing Point:    " + str( freezingPoint ) )
-	print( "Ref Range:         " + str( referenceRange ) )
-
-	print( "Boiling Measured:  " + str( boilingMeasured ) )
-	print( "Freezing Measured: " + str( freezingMeasured ) )
-	print( "Measured Range:    " + str( measuredRange ) )
+log( LOG_LEVEL_INFO, "settings/calibration/elevation", str( elevation ), False )
+log( LOG_LEVEL_INFO, "settings/calibration/boilingPoint", str( boilingPoint ), False )
+log( LOG_LEVEL_INFO, "settings/calibration/freezingPoint", str( freezingPoint ), False )
+log( LOG_LEVEL_DEBUG, "settings/calibration/referenceRange", str( referenceRange ), False )
+log( LOG_LEVEL_INFO, "settings/calibration/boilingMeasured", str( boilingMeasured ), False )
+log( LOG_LEVEL_INFO, "settings/calibration/freezingMeasured", str( freezingMeasured ), False )
+log( LOG_LEVEL_DEBUG, "settings/calibration/measuredRange", str( measuredRange ), False )
 
 
 # UI Slider settings:
@@ -166,6 +320,10 @@ if debug:
 minTemp			  = 15.0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minTemp" ]
 maxTemp			  = 30.0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "maxTemp" ]
 tempStep		  = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempStep" ]
+
+log( LOG_LEVEL_INFO, "settings/UISlider/minTemp", str( minTemp ), False )
+log( LOG_LEVEL_INFO, "settings/UISlider/maxTemp", str( maxTemp ), False )
+log( LOG_LEVEL_INFO, "settings/UISlider/tempStep", str( tempStep ), False )
 
 try:
 	tempSensor = W1ThermSensor()
@@ -186,9 +344,10 @@ pirIgnoreToStr		= "00:00" if not( settings.exists( "pir" ) ) else settings.get( 
 pirIgnoreFrom		= datetime.time( int( pirIgnoreFromStr.split( ":" )[ 0 ] ), int( pirIgnoreFromStr.split( ":" )[ 1 ] ) )
 pirIgnoreTo			= datetime.time( int( pirIgnoreToStr.split( ":" )[ 0 ] ), int( pirIgnoreToStr.split( ":" )[ 1 ] ) )
 
-if debug:
-	print( "Ignoring Motion Sensor from " + pirIgnoreFrom.strftime("%I:%M %p").lower() + ", to " + pirIgnoreTo.strftime("%I:%M %p").lower() )
-
+log( LOG_LEVEL_INFO, "settings/pir/enabled", str( pirEnabled ), False )
+log( LOG_LEVEL_INFO, "settings/pir/checkInterval", str( pirCheckInterval ), False )
+log( LOG_LEVEL_INFO, "settings/pir/ignoreFrom", str( pirIgnoreFromStr ), False )
+log( LOG_LEVEL_INFO, "settings/pir/ignoreTo", str( pirIgnoreToStr ), False )
 
 # GPIO Pin setup and utility routines:
 
@@ -206,8 +365,11 @@ GPIO.output( fanPin, GPIO.LOW )
 
 if pirEnabled:
 	GPIO.setup( pirPin, GPIO.IN )
-	if debug:
-		print( "PIR Enabled on pin: " + str( pirPin ) )
+
+log( LOG_LEVEL_INFO, "settings/GPIO/coolPin", str( coolPin ), False )
+log( LOG_LEVEL_INFO, "settings/GPIO/heatPin", str( heatPin ), False )
+log( LOG_LEVEL_INFO, "settings/GPIO/fanPin", str( fanPin ), False )
+log( LOG_LEVEL_INFO, "settings/GPIO/pirPin", str( pirPin ), False )
 
 
 ##############################################################################
@@ -232,6 +394,8 @@ def setControlState( control, state ):
 			control.background_color = controlColours[ "normal" ]
 		else:
 			control.background_color = controlColours[ control.text.replace( "[b]", "" ).replace( "[/b]", "" ) ]
+
+		log( LOG_LEVEL_STATE, "control/" + control.text.replace( "[b]", "" ).replace( "[/b]", "" ).lower(), "off" if state == "normal" else "on" )
 
 
 coolControl = ToggleButton( text="[b]Cool[/b]", 
@@ -358,12 +522,16 @@ def display_current_weather( dt ):
 				"Sun:           " + time.strftime("%H:%M", time.localtime( weather[ "sys" ][ "sunrise" ] ) ) + " am, " + time.strftime("%I:%M", time.localtime( weather[ "sys" ][ "sunset" ] ) ) + " pm"
 			) )
 
+			log( LOG_LEVEL_INFO, "weather/current", "updated" )
+
 		except:
 			interval = weatherExceptionInterval
 
 			weatherImg.source = "web/images/na.png"
 			weatherSummaryLabel.text = ""
 			weatherDetailsLabel.text = ""
+
+			log( LOG_LEVEL_ERROR, "weather/current", "update failed" )
 
 		Clock.schedule_once( display_current_weather, interval )
 
@@ -431,6 +599,8 @@ def display_forecast_weather( dt ):
 
 			forecastTomoDetailsLabel.text = tomoText
 
+			log( LOG_LEVEL_INFO, "weather/forecast", "updated" )
+
 		except:
 			interval = weatherExceptionInterval
 
@@ -440,6 +610,8 @@ def display_forecast_weather( dt ):
 			forecastTomoImg.source = "web/images/na.png"
 			forecastTomoSummaryLabel.text = ""
 			forecastTomoDetailsLabel.text = ""
+
+			log( LOG_LEVEL_ERROR, "weather/forecast", "update failed" )
 
 		Clock.schedule_once( display_forecast_weather, interval )
 
@@ -455,9 +627,13 @@ def get_ip_address():
 	s.settimeout( 10 )   # 10 seconds
 	try:
 		s.connect( ( "8.8.8.8", 80 ) )    # Google DNS server
-		return s.getsockname()[0] 
+		ip = s.getsockname()[0] 
+		log( LOG_LEVEL_INFO, "settings/ip", ip, False )
 	except socket.error:
-		return "127.0.0.1"
+		ip = "127.0.0.1"
+		log( LOG_LEVEL_ERROR, "settings/ip", "failed to get ip address, returning " + ip, False )
+
+	return ip
 
 
 ##############################################################################
@@ -473,14 +649,6 @@ def change_system_settings():
 		hpin_start = str( GPIO.input( heatPin ) )
 		cpin_start = str( GPIO.input( coolPin ) )
 		fpin_start = str( GPIO.input( fanPin ) )
-
-		if debug:
-			print( "Change System Settings Called" )
-			print( "   Current Temp: " + str( currentTemp ) )
-			print( "   Set Temp:     " + str( setTemp ) )
-			print( "   Heat Button:  " + ( "On" if heatControl.state == "down" else "Off" ) ) 
-			print( "   Cool Button:  " + ( "On" if coolControl.state == "down" else "Off" ) ) 
-			print( "   Fan  Button:  " + ( "On" if fanControl.state == "down" else "Off" ) ) 
 
 		if heatControl.state == "down":
 			GPIO.output( coolPin, GPIO.LOW )
@@ -521,19 +689,18 @@ def change_system_settings():
 
 		statusLabel.text = get_status_string()
 
-		if debug:
-			print( "   Heat Pin:     " + hpin_start + " --> " + str( GPIO.input( heatPin ) ) )
-			print( "   Cool Pin:     " + cpin_start + " --> " + str( GPIO.input( coolPin ) ) )
-			print( "   Fan Pin:      " + fpin_start + " --> " + str( GPIO.input( fanPin ) ) )
+		if hpin_start != str( GPIO.input( heatPin ) ):
+			log( LOG_LEVEL_STATE, "system/heat", "on" if GPIO.input( heatPin ) else "off" )
+		if cpin_start != str( GPIO.input( coolPin ) ):
+			log( LOG_LEVEL_STATE, "system/cool", "on" if GPIO.input( coolPin ) else "off" )
+		if fpin_start != str( GPIO.input( fanPin ) ):
+			log( LOG_LEVEL_STATE, "system/fan", "on" if GPIO.input( fanPin ) else "off" )
 
 
 # This callback will be bound to the touch screen UI buttons:
 
 def control_callback( control ):
 	with thermostatLock:
-		if debug:
-			print( "Button pressed,", control.text, " state: ", control.state )
-
 		setControlState( control, control.state ) 	# make sure we change the background colour!
 
 		if control is coolControl:
@@ -553,13 +720,13 @@ def check_sensor_temp( dt ):
 	with thermostatLock:
 		global currentTemp
 		global tempSensor
+		priorCurrent = currentTemp
+
 		if tempSensor is not None:
 			rawTemp = tempSensor.get_temperature( sensorUnits )
 			correctedTemp = ( ( ( rawTemp - freezingMeasured ) * referenceRange ) / measuredRange ) + freezingPoint
 			currentTemp = round( correctedTemp, 1 )
-			if debug:
-				print( "Raw Temp:         " + str( rawTemp ) )
-				print( "Corrected Temp:   " + str( correctedTemp ) )
+			log( LOG_LEVEL_DEBUG, "state/system/temperature/raw", str( rawTemp ) )
 
 		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
 		altCurLabel.text  = currentLabel.text
@@ -571,6 +738,9 @@ def check_sensor_temp( dt ):
 		timeLabel.text      = ( "[b]" + ( timeStr if timeStr[0:1] != "0" else timeStr[1:] ) + "[/b]" ).lower()
 		altTimeLabel.text  	= timeLabel.text
 
+		if priorCurrent != currentTemp:
+			log( LOG_LEVEL_STATE, "system/temperature/current", str( currentTemp ) )		
+
 		change_system_settings()
 
 
@@ -579,8 +749,11 @@ def check_sensor_temp( dt ):
 def update_set_temp( slider, value ):
 	with thermostatLock:
 		global setTemp
+		priorTemp = setTemp
 		setTemp = round( slider.value, 1 )
 		setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
+		if priorTemp != setTemp:
+			log( LOG_LEVEL_STATE, "system/temperature/set/ui", str( setTemp ) )
 
 
 # Check the PIR motion sensor status
@@ -590,6 +763,8 @@ def check_pir( pin ):
 
 	with thermostatLock:
 		if GPIO.input( pirPin ): 
+			log( LOG_LEVEL_INFO, "state/system/pir", "Motion detected on PIR pin: " + str( pirPin ) + "!" )
+
 			if minUITimer != None:
 				  Clock.unschedule( show_minimal_ui )
 
@@ -606,13 +781,11 @@ def check_pir( pin ):
 					ignore = True
 
 			if screenMgr.current == "minimalUI" and not( ignore ):
-			   screenMgr.current = "thermostatUI"
-
-			if debug:
-				print( "Motion detected on PIR pin: " + str( pirPin ) + "!" )
+				screenMgr.current = "thermostatUI"
+				log( LOG_LEVEL_DEBUG, "state/screen", "Full" )
+	
 		else:
-			if debug:
-				print( "No Motion detected on PIR pin: " + str( pirPin ) )
+			log( LOG_LEVEL_DEBUG, "state/system/pir", "No Motion detected on PIR pin: " + str( pirPin ) )
 
 
 # Minimal UI Display functions and classes
@@ -620,6 +793,7 @@ def check_pir( pin ):
 def show_minimal_ui( dt ):
 	with thermostatLock:
 		screenMgr.current = "minimalUI"
+		log( LOG_LEVEL_DEBUG, "state/screen", "Minimal" )
 
 
 class MinimalScreen( Screen ):
@@ -638,6 +812,7 @@ class MinimalScreen( Screen ):
 					Clock.unschedule( show_minimal_ui )
 				minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout )
 				self.manager.current = "thermostatUI"
+				log( LOG_LEVEL_DEBUG, "state/screen", "Full" )
 			return True
 
 
@@ -792,9 +967,11 @@ class ThermostatApp( App ):
 ##############################################################################
 
 def startScheduler():
+	log( LOG_LEVEL_INFO, "scheduler", "started" )
 	while True:
 		if holdControl.state == "normal":
 			with scheduleLock:
+				log( LOG_LEVEL_DEBUG, "scheduler", "Running pending" )
 				schedule.run_pending()
 
 		time.sleep( 10 )
@@ -807,7 +984,7 @@ def setScheduledTemp( temp ):
 			setTemp = round( temp, 1 )
 			setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
 			tempSlider.value = setTemp
-			if debug: print( "   setScheduledTemp Called:     " + str( temp ) )
+			log( LOG_LEVEL_STATE, "system/temperature/set/schedule", str( setTemp ) )
 
 
 def getTestSchedule():
@@ -840,18 +1017,21 @@ def reloadSchedule():
 			if holdControl.state != "down":
 				if heatControl.state == "down":
 					activeSched = thermoSched[ "heat" ]  
+					log( LOG_LEVEL_INFO, "schedule/load", "heat" )
 				elif coolControl.state == "down":
 					activeSched = thermoSched[ "cool" ]  
+					log( LOG_LEVEL_INFO, "schedule/load", "cool" )
 
 				if useTestSchedule: 
 					activeSched = getTestSchedule()
+					log( LOG_LEVEL_INFO, "schedule/load", "test" )
 					print "Using Test Schedule!!!"
 	
 		if activeSched != None:
 			for day, entries in activeSched.iteritems():
 				for i, entry in enumerate( entries ):
 					getattr( schedule.every(), day ).at( entry[ 0 ] ).do( setScheduledTemp, entry[ 1 ] )
-					if debug: print "Schedule Set: " + day + ", at: " + entry[ 0 ] + " = " + str( entry[ 1 ] ) + scaleUnits
+					log( LOG_LEVEL_DEBUG, "schedule/set", day + ", at: " + entry[ 0 ] + " = " + str( entry[ 1 ] ) + scaleUnits )
 
 
 ##############################################################################
@@ -863,7 +1043,8 @@ def reloadSchedule():
 class WebInterface( object ):
 
 	@cherrypy.expose
-	def index( self ):		
+	def index( self ):	
+		log( LOG_LEVEL_INFO, "webserver/served/thermostat.html", cherrypy.request.remote.ip )	
 		file = open( "web/html/thermostat.html", "r" )
 
 		html = file.read()
@@ -898,6 +1079,8 @@ class WebInterface( object ):
 		global heatControl
 		global coolControl
 		global fanControl
+
+		log( LOG_LEVEL_INFO, "webserver/set/thermostat", cherrypy.request.remote.ip )	
 
 		tempChanged = setTemp != float( temp )
 
@@ -946,7 +1129,8 @@ class WebInterface( object ):
 
 
 	@cherrypy.expose
-	def schedule( self ):		
+	def schedule( self ):	
+		log( LOG_LEVEL_INFO, "webserver/served/thermostat_schedule.html", cherrypy.request.remote.ip )			
 		file = open( "web/html/thermostat_schedule.html", "r" )
 
 		html = file.read()
@@ -965,6 +1149,7 @@ class WebInterface( object ):
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	def save( self ):
+		log( LOG_LEVEL_INFO, "webserver/set/schedule", cherrypy.request.remote.ip )	
 		schedule = cherrypy.request.json
 
 		with scheduleLock:
@@ -988,10 +1173,12 @@ class WebInterface( object ):
 		return html
 
 
-def startWebServer():
+def startWebServer():	
 	host = "discover" if not( settings.exists( "web" ) ) else settings.get( "web" )[ "host" ]
 	cherrypy.server.socket_host = host if host != "discover" else get_ip_address()								# use machine IP address if host = "discover"
 	cherrypy.server.socket_port = 80 if not( settings.exists( "web" ) ) else settings.get( "web" )[ "port" ]
+
+	log( LOG_LEVEL_STATE, "webserver/startup", "starting on " + cherrypy.server.socket_host + ":" + str( cherrypy.server.socket_port ) )
 
 	conf = {
 		'/': {
@@ -1028,7 +1215,7 @@ def startWebServer():
 		}
 	)
 
-	cherrypy.quickstart ( WebInterface(), '/', conf )
+	cherrypy.quickstart ( WebInterface(), '/', conf )	
 
 
 ##############################################################################
@@ -1057,5 +1244,13 @@ if __name__ == '__main__':
 	try:
 		main()
 	finally:
+		log( LOG_LEVEL_STATE, "shutdown", "Thermostat Shutting Down..." )
 		GPIO.cleanup()
+
+		if logFile is not None:
+			logFile.close()
+
+		if mqttEnabled:	
+			mqttc.loop_stop()
+			mqttc.disconnect()
 

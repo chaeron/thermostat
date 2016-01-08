@@ -43,5 +43,16 @@
     "web": {
         "host": "discover",
         "port": 80
-    }
+    },
+	"mqtt": {
+		"enabled": 0,
+		"clientID": "thermostat",
+		"server": "localhost",
+		"port": 1883,
+		"pubPrefix": "thermostat"
+	},
+	"logging": {
+		"channel": "file",
+		"level": "state"
+	}
 }
