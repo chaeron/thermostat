@@ -49,7 +49,7 @@
 		"clientID": "thermostat",
 		"server": "localhost",
 		"port": 1883,
-		"pubPrefix": "thermostat"
+		"pubPrefix": "mymqtt"
 	},
 	"logging": {
 		"channel": "file",

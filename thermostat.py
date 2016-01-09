@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.7"
+THERMOSTAT_VERSION = "1.8"
 
 # Debug settings
 
@@ -185,8 +185,8 @@ if mqttAvailable:
 	mqttPort       		= 1883 			if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "port" ]
 	mqttPubPrefix     	= "thermostat" 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "pubPrefix" ]
 
-	mqttSub_restart		= str( mqttPubPrefix + "/ID:" + mqttClientID + "/command/restart" )
-	mqttSub_loglevel	= str( mqttPubPrefix + "/ID:" + mqttClientID + "/command/loglevel" )
+	mqttSub_restart		= str( mqttPubPrefix + "/" + mqttClientID + "/command/restart" )
+	mqttSub_loglevel	= str( mqttPubPrefix + "/" + mqttClientID + "/command/loglevel" )
 else:
 	mqttEnabled    = False
 
@@ -232,7 +232,7 @@ def log_dummy( level, category, msg, timestamp=True, single=False ):
 def log_mqtt( level, category, msg, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
-		topic = mqttPubPrefix + "/" + LOG_LEVELS_STR[ level ] + "/" + category
+		topic = mqttPubPrefix + "/" + mqttClientID + "/" + LOG_LEVELS_STR[ level ] + "/" + category
 		payload = ts + msg
 
 		if single:

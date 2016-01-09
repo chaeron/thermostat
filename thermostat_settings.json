@@ -12,7 +12,7 @@
         "clientID": "thermostat",
         "enabled": 0,
         "port": 1883,
-        "pubPrefix": "thermostat",
+        "pubPrefix": "mymqtt",
         "server": "localhost"
     },
     "pir": {
