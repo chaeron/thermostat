@@ -31,13 +31,14 @@
 
 import threading
 import math
-import os, os.path
+import os, os.path, sys
 import time
 import datetime
 import urllib2
 import json
 import random
 import socket
+import re
 
 
 ##############################################################################
@@ -139,7 +140,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.5"
+THERMOSTAT_VERSION = "1.6"
 
 # Debug settings
 
@@ -522,7 +523,8 @@ def display_current_weather( dt ):
 				"Sun:           " + time.strftime("%H:%M", time.localtime( weather[ "sys" ][ "sunrise" ] ) ) + " am, " + time.strftime("%I:%M", time.localtime( weather[ "sys" ][ "sunset" ] ) ) + " pm"
 			) )
 
-			log( LOG_LEVEL_INFO, "weather/current", "updated" )
+			
+			log( LOG_LEVEL_INFO, "weather/current", weather[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', weatherDetailsLabel.text ).strip() ) )
 
 		except:
 			interval = weatherExceptionInterval
@@ -599,7 +601,8 @@ def display_forecast_weather( dt ):
 
 			forecastTomoDetailsLabel.text = tomoText
 
-			log( LOG_LEVEL_INFO, "weather/forecast", "updated" )
+			log( LOG_LEVEL_INFO, "weather/forecast/today", today[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTodayDetailsLabel.text ).strip() ) )
+			log( LOG_LEVEL_INFO, "weather/forecast/tomorrow", tomo[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTomoDetailsLabel.text ).strip() ) )
 
 		except:
 			interval = weatherExceptionInterval
@@ -634,6 +637,22 @@ def get_ip_address():
 		log( LOG_LEVEL_ERROR, "settings/ip", "failed to get ip address, returning " + ip, False )
 
 	return ip
+
+
+def restart():
+	log( LOG_LEVEL_STATE, "restart", "Thermostat restarting..." )
+	GPIO.cleanup()
+
+	if logFile is not None:
+		logFile.close()
+
+	if mqttEnabled:	
+		mqttc.loop_stop()
+		mqttc.disconnect()
+
+	os.fsync()
+
+	os.execl( sys.executable, 'python', __file__, *sys.argv[1:] )	# This does not return!!!
 
 
 ##############################################################################
