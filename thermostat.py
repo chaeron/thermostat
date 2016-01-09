@@ -102,6 +102,7 @@ from w1thermsensor import W1ThermSensor
 
 try:
 	import paho.mqtt.client as mqtt
+	import paho.mqtt.publish as publish
 	mqttAvailable = True
 except ImportError:
 	mqttAvailable = False
@@ -140,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.6"
+THERMOSTAT_VERSION = "1.7"
 
 # Debug settings
 
@@ -160,10 +161,18 @@ scheduleLock   = threading.RLock()
 settings = JsonStore( "thermostat_settings.json" )
 
 
-# MQTT settings
+# MQTT settings/setup
 
 def mqtt_on_connect( client, userdata, flags, rc ):
 	print( "MQTT Connected with result code: " + str( rc ) )
+
+	if rc == 0:
+		src = 	client.subscribe( mqttSub_restart, 1 ) 	# Subscribe to restart commands for this particular clientID
+		
+		if src[ 0 ] == 0:
+			log( LOG_LEVEL_INFO, "mqtt/subscribe/restart", mqttClientID )
+		else:
+			log( LOG_LEVEL_ERROR, "mqtt/subscribe/restart/failed", "result code: " + src[ 0 ] )
 
 
 if mqttAvailable:
@@ -172,17 +181,20 @@ if mqttAvailable:
 	mqttServer     		= 'localhost' 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "server" ]
 	mqttPort       		= 1883 			if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "port" ]
 	mqttPubPrefix     	= "thermostat" 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "pubPrefix" ]
+
+	mqttSub_restart		= str( mqttPubPrefix + "/command/restart/" + mqttClientID )
 else:
 	mqttEnabled    = False
 
 if mqttEnabled:
 	mqttc = mqtt.Client( mqttClientID )
 	mqttc.on_connect = mqtt_on_connect
+	mqttc.message_callback_add( mqttSub_restart, lambda client, userdata, message: restart() )
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
 
 
-# Logging settings
+# Logging settings/setup
 
 LOG_FILE_NAME = "thermostat.log"
 
@@ -206,25 +218,29 @@ LOG_LEVELS_STR = { v: k for k, v in LOG_LEVELS.items() }
 logFile = None
 
 
-def log_dummy( level, category, msg, timestamp=True ):
+def log_dummy( level, category, msg, timestamp=True, single=False ):
 	pass
 
 
-def log_mqtt( level, category, msg, timestamp=True ):
+def log_mqtt( level, category, msg, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
 		topic = mqttPubPrefix + "/" + LOG_LEVELS_STR[ level ] + "/" + category
 		payload = ts + msg
-		mqttc.publish( topic, payload )
+
+		if single:
+			publish.single( topic, payload, hostname=mqttServer, port=mqttPort, client_id=mqttClientID )
+		else:
+			mqttc.publish( topic, payload )
 		
 
-def log_file( level, category, msg, timestamp=True ):
+def log_file( level, category, msg, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) 
 		logFile.write( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg + "\n" )
 
 
-def log_print( level, category, msg, timestamp=True ):
+def log_print( level, category, msg, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
 		print( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg )
@@ -640,17 +656,16 @@ def get_ip_address():
 
 
 def restart():
-	log( LOG_LEVEL_STATE, "restart", "Thermostat restarting..." )
+	log( LOG_LEVEL_STATE, "restart", "Thermostat restarting...", single=True ) 
 	GPIO.cleanup()
 
 	if logFile is not None:
+		logFile.flush()
+		os.fsync( logFile.fileno() )
 		logFile.close()
 
 	if mqttEnabled:	
-		mqttc.loop_stop()
 		mqttc.disconnect()
-
-	os.fsync()
 
 	os.execl( sys.executable, 'python', __file__, *sys.argv[1:] )	# This does not return!!!
 
@@ -1267,6 +1282,8 @@ if __name__ == '__main__':
 		GPIO.cleanup()
 
 		if logFile is not None:
+			logFile.flush()
+			os.fsync( logFile.fileno() )
 			logFile.close()
 
 		if mqttEnabled:	
