@@ -188,6 +188,22 @@ The thermostat code supports logging to a remote MQTT broker/server (if you enab
 
 If you want to use remote logging to a MQTT broker/server, do a "sudo pip install paho-mqtt" to install the required client libraries, and configure MQTT settings in thermostat_settings.json to enable MQTT and point to your remote MQTT broker/server instance. The author is running the mosquitto MQTT broker on a separate Raspberry Pi for this purpose.
 
+MQTT topics are structured as follows:  _mqttPubPrefix_/_mqttClientID_/_MSGTYPE_/etc...  
+
+_mqttPubPrefix_ and _mqttClientID_ are set in the thermostat_settings.json file and default to "mymqtt" and "thermostat" respectively. 
+
+_MSGTYPE_ is currently either "log" or "command", for log output or commands directed at the thermostat. The remainder of the topic depends on the context of which is being sent as does the message payload. Read the code for details, or monitor all messages flowing into your MQTT broker/server with a subscription like  "mqttPubPrefix/#" to see what is being generated. Currently the only commands implemented are "restart" and "loglevel" which restart the thermostat code and change the logging level, respectively. Log message topics have the log level as part of the topic, right after the "log" _MSGTYPE_. Message payload is specific to the context. Log messages have a payload that starts with a timestamp, with the actual data following that.
+
+For example, a log message sent by the thermostat might look like this (mqtt topic and payload):
+
+	mymqtt/thermostat/log/state/system/temperature/current    2016-01-09T09:19:27 21.0
+
+A message (mqtt topic and payload) to set the log level to debug, sent to the thermostat, might look like this:
+
+	mymqtt/thermostat/command/loglevel    debug
+
+If you have more than one thermostat/device then their _mqttClientID_s must be unique (for example, the author's actual thermostat has _mqttClientID_="thermostat" and his test environment running on a laptop with _mqttClientID_="laptop"). You might want to consider changing _mqttPubPrefix_ to something unique to your installation, like your surname or local wifi network SSID (The author uses _mqttPubPrefix_="chaeron").
+
 Down the road, functionality will be added to use MQTT to forward remote sensor readings back to the thermostat (eg. multiple, remote battery-powered, wireless temperature/humidity/pressure sensors that can be placed in various rooms in the house).
 
 

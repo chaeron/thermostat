@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.8"
+THERMOSTAT_VERSION = "1.8.1"
 
 # Debug settings
 
@@ -232,7 +232,7 @@ def log_dummy( level, category, msg, timestamp=True, single=False ):
 def log_mqtt( level, category, msg, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
-		topic = mqttPubPrefix + "/" + mqttClientID + "/" + LOG_LEVELS_STR[ level ] + "/" + category
+		topic = mqttPubPrefix + "/" + mqttClientID + "/log/" + LOG_LEVELS_STR[ level ] + "/" + category
 		payload = ts + msg
 
 		if single:
