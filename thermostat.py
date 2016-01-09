@@ -167,7 +167,10 @@ def mqtt_on_connect( client, userdata, flags, rc ):
 	print( "MQTT Connected with result code: " + str( rc ) )
 
 	if rc == 0:
-		src = 	client.subscribe( mqttSub_restart, 1 ) 	# Subscribe to restart commands for this particular clientID
+		src = 	client.subscribe( [
+									( mqttSub_restart, 0 ), 	# Subscribe to restart commands for this particular clientID
+									( mqttSub_loglevel, 0 )		# Subscribe to log level commands for this particular clientID
+								  ] )
 		
 		if src[ 0 ] == 0:
 			log( LOG_LEVEL_INFO, "mqtt/subscribe/restart", mqttClientID )
@@ -182,14 +185,18 @@ if mqttAvailable:
 	mqttPort       		= 1883 			if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "port" ]
 	mqttPubPrefix     	= "thermostat" 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "pubPrefix" ]
 
-	mqttSub_restart		= str( mqttPubPrefix + "/command/restart/" + mqttClientID )
+	mqttSub_restart		= str( mqttPubPrefix + "/ID:" + mqttClientID + "/command/restart" )
+	mqttSub_loglevel	= str( mqttPubPrefix + "/ID:" + mqttClientID + "/command/loglevel" )
 else:
 	mqttEnabled    = False
 
 if mqttEnabled:
 	mqttc = mqtt.Client( mqttClientID )
 	mqttc.on_connect = mqtt_on_connect
+
 	mqttc.message_callback_add( mqttSub_restart, lambda client, userdata, message: restart() )
+	mqttc.message_callback_add( mqttSub_loglevel, lambda client, userdata, message: setLogLevel( message ) )
+
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
 
@@ -668,6 +675,17 @@ def restart():
 		mqttc.disconnect()
 
 	os.execl( sys.executable, 'python', __file__, *sys.argv[1:] )	# This does not return!!!
+
+
+def setLogLevel( msg ):
+	global logLevel
+
+	if LOG_LEVELS.get( msg.payload ):
+		log( LOG_LEVEL_STATE, "loglevel", "LogLevel set to: " + msg.payload ) 
+
+		logLevel = LOG_LEVELS.get( msg.payload, logLevel )
+	else:
+		log( LOG_LEVEL_ERROR, "loglevel", "Invalid LogLevel: " + msg.payload ) 
 
 
 ##############################################################################
