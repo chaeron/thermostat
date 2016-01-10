@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.8.1"
+THERMOSTAT_VERSION = "1.9.0"
 
 # Debug settings
 
@@ -159,6 +159,7 @@ scheduleLock   = threading.RLock()
 # Thermostat persistent settings
 
 settings = JsonStore( "thermostat_settings.json" )
+state 	 = JsonStore( "thermostat_state.json" )
 
 
 # MQTT settings/setup
@@ -294,7 +295,7 @@ windFactor		  = 3.6 if tempScale == "metric" else 1.0
 windUnits		  = " km/h" if tempScale == "metric" else " mph"
 
 currentTemp       = 22.0 if tempScale == "metric" else 72.0
-setTemp           = 22.0 if not( settings.exists( "state" ) ) else settings.get( "state" )[ "setTemp" ]
+setTemp           = 22.0 if not( state.exists( "state" ) ) else state.get( "state" )[ "setTemp" ]
 
 tempHysteresis    = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempHysteresis" ]
 
@@ -427,28 +428,28 @@ coolControl = ToggleButton( text="[b]Cool[/b]",
 							size_hint = ( None, None )
 						  )
 
-setControlState( coolControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "coolControl" ] )
+setControlState( coolControl, "normal" if not( state.exists( "state" ) ) else state.get( "state" )[ "coolControl" ] )
 
 heatControl = ToggleButton( text="[b]Heat[/b]", 
 							markup=True, 
 							size_hint = ( None, None )
 						  )
 
-setControlState( heatControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "heatControl" ] )
+setControlState( heatControl, "normal" if not( state.exists( "state" ) ) else state.get( "state" )[ "heatControl" ] )
 
 fanControl  = ToggleButton( text="[b]Fan[/b]", 
 							markup=True, 
 							size_hint = ( None, None )
 						  )
 
-setControlState( fanControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "fanControl" ] )
+setControlState( fanControl, "normal" if not( state.exists( "state" ) ) else state.get( "state" )[ "fanControl" ] )
 
 holdControl = ToggleButton( text="[b]Hold[/b]", 
 							markup=True, 
 							size_hint = ( None, None )
 						  )
 
-setControlState( holdControl, "normal" if not( settings.exists( "state" ) ) else settings.get( "state" )[ "holdControl" ] )
+setControlState( holdControl, "normal" if not( state.exists( "state" ) ) else state.get( "state" )[ "holdControl" ] )
 
 
 
@@ -735,8 +736,8 @@ def change_system_settings():
 				GPIO.output( fanPin, GPIO.LOW )
 
 		# save the thermostat state in case of restart
-		settings.put( "state",	setTemp=setTemp, 
-					  			heatControl=heatControl.state, coolControl=coolControl.state, fanControl=fanControl.state, holdControl=holdControl.state
+		state.put( "state",	setTemp=setTemp, 
+					  		heatControl=heatControl.state, coolControl=coolControl.state, fanControl=fanControl.state, holdControl=holdControl.state
 		)
 
 		statusLabel.text = get_status_string()
@@ -779,6 +780,7 @@ def check_sensor_temp( dt ):
 			correctedTemp = ( ( ( rawTemp - freezingMeasured ) * referenceRange ) / measuredRange ) + freezingPoint
 			currentTemp = round( correctedTemp, 1 )
 			log( LOG_LEVEL_DEBUG, "state/system/temperature/raw", str( rawTemp ) )
+			log( LOG_LEVEL_DEBUG, "state/system/temperature/corrected", str( correctedTemp ) )
 
 		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
 		altCurLabel.text  = currentLabel.text

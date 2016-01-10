@@ -1,0 +1,9 @@
+{
+	"state": {
+        "coolControl": "normal",
+        "fanControl": "normal",
+        "heatControl": "normal",
+        "holdControl": "normal",
+        "setTemp": 72.0
+    } 
+}
