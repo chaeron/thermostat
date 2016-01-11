@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.0"
+THERMOSTAT_VERSION = "1.9.1"
 
 # Debug settings
 
@@ -1143,6 +1143,9 @@ class WebInterface( object ):
 			setLabel.text = "  Set\n[b]" + str( setTemp ) + "c[/b]"
 			tempSlider.value = setTemp
 
+			if tempChanged:
+				log( LOG_LEVEL_STATE, "system/temperature/set/web", str( setTemp ) )
+
 			if heat == "on":
 				setControlState( heatControl, "down" )
 			else:
@@ -1203,7 +1206,7 @@ class WebInterface( object ):
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	def save( self ):
-		log( LOG_LEVEL_INFO, "webserver/set/schedule", cherrypy.request.remote.ip )	
+		log( LOG_LEVEL_STATE, "schedule/set/web", cherrypy.request.remote.ip )	
 		schedule = cherrypy.request.json
 
 		with scheduleLock:
