@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.2"
+THERMOSTAT_VERSION = "1.9.3"
 
 # Debug settings
 
@@ -169,8 +169,9 @@ def mqtt_on_connect( client, userdata, flags, rc ):
 
 	if rc == 0:
 		src = 	client.subscribe( [
-									( mqttSub_restart, 0 ), 	# Subscribe to restart commands for this particular clientID
-									( mqttSub_loglevel, 0 )		# Subscribe to log level commands for this particular clientID
+									( mqttSub_restart, 0 ), 	# Subscribe to restart commands
+									( mqttSub_loglevel, 0 ),	# Subscribe to log level commands 
+									( mqttSub_version, 0 )		# Subscribe to version commands 
 								  ] )
 		
 		if src[ 0 ] == 0:
@@ -186,8 +187,10 @@ if mqttAvailable:
 	mqttPort       		= 1883 			if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "port" ]
 	mqttPubPrefix     	= "thermostat" 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "pubPrefix" ]
 
+	mqttSub_version		= str( mqttPubPrefix + "/" + mqttClientID + "/command/version" )
 	mqttSub_restart		= str( mqttPubPrefix + "/" + mqttClientID + "/command/restart" )
 	mqttSub_loglevel	= str( mqttPubPrefix + "/" + mqttClientID + "/command/loglevel" )
+	
 else:
 	mqttEnabled    = False
 
@@ -197,6 +200,7 @@ if mqttEnabled:
 
 	mqttc.message_callback_add( mqttSub_restart, lambda client, userdata, message: restart() )
 	mqttc.message_callback_add( mqttSub_loglevel, lambda client, userdata, message: setLogLevel( message ) )
+	mqttc.message_callback_add( mqttSub_version, lambda client, userdata, message: getVersion() )
 
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
@@ -280,7 +284,7 @@ for case in switch( loggingChannel ):
 logLevel = LOG_LEVELS.get( loggingLevel, LOG_LEVEL_NONE )
 
 log( LOG_LEVEL_STATE, "startup", "Thermostat Starting Up..." )
-log( LOG_LEVEL_STATE, "startup/version", THERMOSTAT_VERSION )
+log( LOG_LEVEL_STATE, "version", THERMOSTAT_VERSION )
 
 
 # Various temperature settings:
@@ -663,6 +667,10 @@ def get_ip_address():
 		log( LOG_LEVEL_ERROR, "settings/ip", "failed to get ip address, returning " + ip, False )
 
 	return ip
+
+
+def getVersion():
+	log( LOG_LEVEL_STATE, "version", THERMOSTAT_VERSION )
 
 
 def restart():
