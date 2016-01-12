@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.1"
+THERMOSTAT_VERSION = "1.9.2"
 
 # Debug settings
 
@@ -473,6 +473,7 @@ def get_status_string():
 			   "Sched:   " + sched
 
 
+versionLabel = Label( text="Thermostat v" + str( THERMOSTAT_VERSION ), size_hint = ( None, None ), font_size='10sp', markup=True, text_size=( 150, 20 ) )
 currentLabel = Label( text="[b]" + str( currentTemp ) + scaleUnits + "[/b]", size_hint = ( None, None ), font_size='100sp', markup=True, text_size=( 300, 200 ) )
 altCurLabel	 = Label( text=currentLabel.text, size_hint = ( None, None ), font_size='100sp', markup=True, text_size=( 300, 200 ), color=( 0.4, 0.4, 0.4, 0.2 ) )
 
@@ -502,6 +503,7 @@ weatherAppKey		 = settings.get( "weather" )[ "appkey" ]
 weatherURLBase  	 = "http://api.openweathermap.org/data/2.5/"
 weatherURLCurrent 	 = weatherURLBase + "weather?units=" + tempScale + "&q=" + weatherLocation + "&APPID=" + weatherAppKey
 weatherURLForecast 	 = weatherURLBase + "forecast/daily?units=" + tempScale + "&q=" + weatherLocation + "&APPID=" + weatherAppKey
+weatherURLTimeout 	 = settings.get( "weather" )[ "URLtimeout" ]
 
 weatherRefreshInterval   = settings.get( "weather" )[ "weatherRefreshInterval" ] * 60  
 forecastRefreshInterval  = settings.get( "weather" )[ "forecastRefreshInterval" ] * 60  
@@ -520,7 +522,7 @@ forecastTomoImg    		  = Image( source="web/images/na.png", size_hint = ( None, 
 
 
 def get_weather( url ):
-	return json.loads( urllib2.urlopen( url ).read() )
+	return json.loads( urllib2.urlopen( url, None, weatherURLTimeout ).read() )
 
 
 def get_cardinal_direction( heading ):
@@ -934,6 +936,8 @@ class ThermostatApp( App ):
 		weatherSummaryLabel.pos = ( 430, 160 )
 		weatherDetailsLabel.pos = ( 395, 60 )
 
+		versionLabel.pos = ( 320, 0 )
+
 		forecastTodayHeading = Label( text="[b]Today[/b]:", font_size='20sp', markup=True, size_hint = ( None, None ), pos = ( 0, 290 ) )
 		
 		forecastTodayImg.pos = ( 0, 260 )
@@ -961,6 +965,7 @@ class ThermostatApp( App ):
 		thermostatUI.add_widget( weatherImg )
 		thermostatUI.add_widget( weatherSummaryLabel )
 		thermostatUI.add_widget( weatherDetailsLabel )
+		thermostatUI.add_widget( versionLabel )
 		thermostatUI.add_widget( forecastTodayHeading )
 		thermostatUI.add_widget( forecastTodayImg )
 		thermostatUI.add_widget( forecastTodaySummaryLabel )
@@ -1105,7 +1110,9 @@ class WebInterface( object ):
 
 		file.close()
 
-		with thermostatLock:
+		with thermostatLock:		
+
+			html = html.replace( "@@version@@", str( THERMOSTAT_VERSION ) )
 			html = html.replace( "@@temp@@", str( setTemp ) )
 			html = html.replace( "@@current@@", str( currentTemp ) + scaleUnits )
 			html = html.replace( "@@minTemp@@", str( minTemp ) )
@@ -1175,6 +1182,7 @@ class WebInterface( object ):
 		file.close()
 		
 		with thermostatLock:
+			html = html.replace( "@@version@@", str( THERMOSTAT_VERSION ) )
 			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) + ", " + timeLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 			html = html.replace( "@@temp@@", ( '<font color="red"><b>' if tempChanged else "" ) + str( setTemp ) + ( '</b></font>' if tempChanged else "" ) )
 			html = html.replace( "@@heat@@", ( '<font color="red"><b>' if heat == "on" else "" ) + heat + ( '</b></font>' if heat == "on" else "" ) )
@@ -1195,6 +1203,7 @@ class WebInterface( object ):
 		file.close()
 		
 		with thermostatLock:
+			html = html.replace( "@@version@@", str( THERMOSTAT_VERSION ) )
 			html = html.replace( "@@minTemp@@", str( minTemp ) )
 			html = html.replace( "@@maxTemp@@", str( maxTemp ) )
 			html = html.replace( "@@tempStep@@", str( tempStep ) )
@@ -1225,6 +1234,7 @@ class WebInterface( object ):
 		file.close()
 		
 		with thermostatLock:
+			html = html.replace( "@@version@@", str( THERMOSTAT_VERSION ) )
 			html = html.replace( "@@dt@@", dateLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) + ", " + timeLabel.text.replace( "[b]", "<b>" ).replace( "[/b]", "</b>" ) )
 		
 		return html

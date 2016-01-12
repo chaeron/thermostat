@@ -42,7 +42,8 @@
         "forecastRefreshInterval": 60,
         "location": "Barrie,ca",
         "weatherExceptionInterval": 5,
-        "weatherRefreshInterval": 10
+        "weatherRefreshInterval": 10,
+		"URLtimeout": 5
     },
     "web": {
         "host": "discover",
