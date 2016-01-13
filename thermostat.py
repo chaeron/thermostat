@@ -141,7 +141,7 @@ class switch(object):
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.3"
+THERMOSTAT_VERSION = "1.9.4"
 
 # Debug settings
 
@@ -165,9 +165,17 @@ state 	 = JsonStore( "thermostat_state.json" )
 # MQTT settings/setup
 
 def mqtt_on_connect( client, userdata, flags, rc ):
+	global mqttReconnect
+
 	print( "MQTT Connected with result code: " + str( rc ) )
 
 	if rc == 0:
+		if mqttReconnect:
+			log( LOG_LEVEL_STATE, "mqtt/reconnected", mqttServer + ":" + str( mqttPort ) )
+		else:
+			mqttReconnect = True
+			log( LOG_LEVEL_STATE, "mqtt/connected", mqttServer + ":" + str( mqttPort ) )
+
 		src = 	client.subscribe( [
 									( mqttSub_restart, 0 ), 	# Subscribe to restart commands
 									( mqttSub_loglevel, 0 ),	# Subscribe to log level commands 
@@ -175,12 +183,13 @@ def mqtt_on_connect( client, userdata, flags, rc ):
 								  ] )
 		
 		if src[ 0 ] == 0:
-			log( LOG_LEVEL_INFO, "mqtt/subscribe/restart", mqttClientID )
+			log( LOG_LEVEL_INFO, "mqtt/subscribe", mqttServer + ":" + str( mqttPort ) )
 		else:
-			log( LOG_LEVEL_ERROR, "mqtt/subscribe/restart/failed", "result code: " + src[ 0 ] )
+			log( LOG_LEVEL_ERROR, "mqtt/subscribe/failed", "result code: " + src[ 0 ] )
 
 
 if mqttAvailable:
+	mqttReconnect		= False
 	mqttEnabled    		= False 		if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "enabled" ]
 	mqttClientID     	= 'thermostat' 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "clientID" ]
 	mqttServer     		= 'localhost' 	if not( settings.exists( "mqtt" ) ) else settings.get( "mqtt" )[ "server" ]
@@ -201,9 +210,6 @@ if mqttEnabled:
 	mqttc.message_callback_add( mqttSub_restart, lambda client, userdata, message: restart() )
 	mqttc.message_callback_add( mqttSub_loglevel, lambda client, userdata, message: setLogLevel( message ) )
 	mqttc.message_callback_add( mqttSub_version, lambda client, userdata, message: getVersion() )
-
-	mqttc.connect( mqttServer, mqttPort )
-	mqttc.loop_start()
 
 
 # Logging settings/setup
@@ -282,6 +288,10 @@ for case in switch( loggingChannel ):
 		log = log_dummy	
 
 logLevel = LOG_LEVELS.get( loggingLevel, LOG_LEVEL_NONE )
+
+if mqttEnabled:
+	mqttc.connect( mqttServer, mqttPort )
+	mqttc.loop_start()
 
 log( LOG_LEVEL_STATE, "startup", "Thermostat Starting Up..." )
 log( LOG_LEVEL_STATE, "version", THERMOSTAT_VERSION )
