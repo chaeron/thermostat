@@ -137,11 +137,52 @@ class switch(object):
 
 ##############################################################################
 #                                                                            #
+#       MySensor.org Controller compatible translated constants              #
+#                                                                            #
+##############################################################################
+
+MSG_TYPE_SET 						= "set"
+MSG_TYPE_PRESENTATION 				= "presentation"
+
+CHILD_DEVICE_NODE					= "node"
+CHILD_DEVICE_MQTT					= "mqtt"
+CHILD_DEVICE_UICONTROL_HEAT			= "heatControl"
+CHILD_DEVICE_UICONTROL_COOL			= "coolControl"
+CHILD_DEVICE_UICONTROL_FAN			= "fanControl"
+CHILD_DEVICE_UICONTROL_HOLD			= "holdControl"
+CHILD_DEVICE_UICONTROL_SLIDER		= "tempSlider"
+CHILD_DEVICE_WEATHER_CURR			= "weatherCurrent"
+CHILD_DEVICE_WEATHER_FCAST_TODAY	= "weatherForecastToday"
+CHILD_DEVICE_WEATHER_FCAST_TOMO		= "weatherForecastTomorrow"
+CHILD_DEVICE_HEAT					= "heat"
+CHILD_DEVICE_COOL					= "cool"
+CHILD_DEVICE_FAN					= "fan"
+CHILD_DEVICE_PIR					= "motionSensor"
+CHILD_DEVICE_TEMP					= "temperature"
+CHILD_DEVICE_SCREEN					= "screen"
+CHILD_DEVICE_SCHEDULER				= "scheduler"
+CHILD_DEVICE_WEBSERVER				= "webserver"
+
+CHILD_DEVICE_SUFFIX_UICONTROL		= "Control"
+
+MSG_SUBTYPE_NAME					= "sketchName"
+MSG_SUBTYPE_VERSION					= "sketchVersion"
+MSG_SUBTYPE_BINARY_STATUS			= "binaryStatus"
+MSG_SUBTYPE_TRIPPED					= "armed"
+MSG_SUBTYPE_ARMED					= "tripped"
+MSG_SUBTYPE_TEMPERATURE				= "temperature"
+MSG_SUBTYPE_FORECAST				= "forecast"
+MSG_SUBTYPE_CUSTOM					= "custom"
+MSG_SUBTYPE_TEXT					= "text"
+
+
+##############################################################################
+#                                                                            #
 #       Settings                                                             #
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.4"
+THERMOSTAT_VERSION = "1.9.5"
 
 # Debug settings
 
@@ -171,10 +212,10 @@ def mqtt_on_connect( client, userdata, flags, rc ):
 
 	if rc == 0:
 		if mqttReconnect:
-			log( LOG_LEVEL_STATE, "mqtt/reconnected", mqttServer + ":" + str( mqttPort ) )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_MQTT, MSG_SUBTYPE_TEXT, "Reconnected to: " + mqttServer + ":" + str( mqttPort ) )
 		else:
 			mqttReconnect = True
-			log( LOG_LEVEL_STATE, "mqtt/connected", mqttServer + ":" + str( mqttPort ) )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_MQTT, MSG_SUBTYPE_TEXT, "Connected to: " + mqttServer + ":" + str( mqttPort ) )
 
 		src = 	client.subscribe( [
 									( mqttSub_restart, 0 ), 	# Subscribe to restart commands
@@ -183,9 +224,9 @@ def mqtt_on_connect( client, userdata, flags, rc ):
 								  ] )
 		
 		if src[ 0 ] == 0:
-			log( LOG_LEVEL_INFO, "mqtt/subscribe", mqttServer + ":" + str( mqttPort ) )
+			log( LOG_LEVEL_INFO, CHILD_DEVICE_MQTT, MSG_SUBTYPE_TEXT, "Subscribe Succeeded: " + mqttServer + ":" + str( mqttPort ) )
 		else:
-			log( LOG_LEVEL_ERROR, "mqtt/subscribe/failed", "result code: " + src[ 0 ] )
+			log( LOG_LEVEL_ERROR, CHILD_DEVICE_MQTT, MSG_SUBTYPE_TEXT, "Subscribe FAILED, result code: " + src[ 0 ] )
 
 
 if mqttAvailable:
@@ -236,14 +277,14 @@ LOG_LEVELS_STR = { v: k for k, v in LOG_LEVELS.items() }
 logFile = None
 
 
-def log_dummy( level, category, msg, timestamp=True, single=False ):
+def log_dummy( level, child_device, msg_subtype, msg, msg_type=MSG_TYPE_SET, timestamp=True, single=False ):
 	pass
 
 
-def log_mqtt( level, category, msg, timestamp=True, single=False ):
+def log_mqtt( level, child_device, msg_subtype, msg, msg_type=MSG_TYPE_SET, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
-		topic = mqttPubPrefix + "/" + mqttClientID + "/log/" + LOG_LEVELS_STR[ level ] + "/" + category
+		topic = mqttPubPrefix + "/sensor/log/" + LOG_LEVELS_STR[ level ] + "/" + mqttClientID + "/" + child_device + "/" + msg_type + "/" + msg_subtype 
 		payload = ts + msg
 
 		if single:
@@ -252,16 +293,16 @@ def log_mqtt( level, category, msg, timestamp=True, single=False ):
 			mqttc.publish( topic, payload )
 		
 
-def log_file( level, category, msg, timestamp=True, single=False ):
+def log_file( level, child_device, msg_subtype, msg, msg_type=MSG_TYPE_SET, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) 
-		logFile.write( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg + "\n" )
+		logFile.write( ts + LOG_LEVELS_STR[ level ] + "/" + child_device + "/" + msg_type + "/" + msg_subtype + ": " + msg + "\n" )
 
 
-def log_print( level, category, msg, timestamp=True, single=False ):
+def log_print( level, child_device, msg_subtype, msg, msg_type=MSG_TYPE_SET, timestamp=True, single=False ):
 	if level >= logLevel:
 		ts = datetime.datetime.now().strftime( "%Y-%m-%dT%H:%M:%S%z " ) if LOG_ALWAYS_TIMESTAMP or timestamp else ""
-		print( ts + LOG_LEVELS_STR[ level ] + "/" + category + ": " + msg )
+		print( ts + LOG_LEVELS_STR[ level ] + "/" + child_device + "/" + msg_type + "/" + msg_subtype + ": " + msg )
 
 
 loggingChannel = "none" if not( settings.exists( "logging" ) ) else settings.get( "logging" )[ "channel" ]
@@ -293,8 +334,8 @@ if mqttEnabled:
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
 
-log( LOG_LEVEL_STATE, "startup", "Thermostat Starting Up..." )
-log( LOG_LEVEL_STATE, "version", THERMOSTAT_VERSION )
+log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_NAME, "Thermostat Starting Up...", msg_type=MSG_TYPE_PRESENTATION )
+log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_VERSION, THERMOSTAT_VERSION, msg_type=MSG_TYPE_PRESENTATION )
 
 
 # Various temperature settings:
@@ -319,19 +360,19 @@ minUIEnabled 	  = 0    if not( settings.exists( "thermostat" ) ) else settings.g
 minUITimeout 	  = 3    if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "minUITimeout" ]
 minUITimer		  = None
 
-log( LOG_LEVEL_INFO, "settings/temperature/tempScale", str( tempScale ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/scaleUnits", str( scaleUnits ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/precipUnits", str( precipUnits ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/precipFactor", str( precipFactor ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/sensorUnits", str( sensorUnits ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/windFactor", str( windFactor ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/windUnits", str( windUnits ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/currentTemp", str( currentTemp ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/setTemp", str( setTemp ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/tempHysteresis", str( tempHysteresis ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/tempCheckInterval", str( tempCheckInterval ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/minUIEnabled", str( minUIEnabled ), False )
-log( LOG_LEVEL_INFO, "settings/temperature/minUITimeout", str( minUITimeout ), False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/tempScale", str( tempScale ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/scaleUnits", str( scaleUnits ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/precipUnits", str( precipUnits ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/precipFactor", str( precipFactor ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/sensorUnits", str( sensorUnits ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/windFactor", str( windFactor ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/windUnits", str( windUnits ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/currentTemp", str( currentTemp ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/setTemp", str( setTemp ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/tempHysteresis", str( tempHysteresis ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/tempCheckInterval", str( tempCheckInterval ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/minUIEnabled", str( minUIEnabled ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/temperature/minUITimeout", str( minUITimeout ), timestamp=False )
 
 
 # Temperature calibration settings:
@@ -345,13 +386,13 @@ boilingMeasured   = settings.get( "calibration" )[ "boilingMeasured" ]
 freezingMeasured  = settings.get( "calibration" )[ "freezingMeasured" ]
 measuredRange	  = boilingMeasured - freezingMeasured
 
-log( LOG_LEVEL_INFO, "settings/calibration/elevation", str( elevation ), False )
-log( LOG_LEVEL_INFO, "settings/calibration/boilingPoint", str( boilingPoint ), False )
-log( LOG_LEVEL_INFO, "settings/calibration/freezingPoint", str( freezingPoint ), False )
-log( LOG_LEVEL_DEBUG, "settings/calibration/referenceRange", str( referenceRange ), False )
-log( LOG_LEVEL_INFO, "settings/calibration/boilingMeasured", str( boilingMeasured ), False )
-log( LOG_LEVEL_INFO, "settings/calibration/freezingMeasured", str( freezingMeasured ), False )
-log( LOG_LEVEL_DEBUG, "settings/calibration/measuredRange", str( measuredRange ), False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/elevation", str( elevation ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/boilingPoint", str( boilingPoint ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/freezingPoint", str( freezingPoint ), timestamp=False )
+log( LOG_LEVEL_DEBUG, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/referenceRange", str( referenceRange ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/boilingMeasured", str( boilingMeasured ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/freezingMeasured", str( freezingMeasured ), timestamp=False )
+log( LOG_LEVEL_DEBUG, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/calibration/measuredRange", str( measuredRange ), timestamp=False )
 
 
 # UI Slider settings:
@@ -360,9 +401,9 @@ minTemp			  = 15.0 if not( settings.exists( "thermostat" ) ) else settings.get( 
 maxTemp			  = 30.0 if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "maxTemp" ]
 tempStep		  = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempStep" ]
 
-log( LOG_LEVEL_INFO, "settings/UISlider/minTemp", str( minTemp ), False )
-log( LOG_LEVEL_INFO, "settings/UISlider/maxTemp", str( maxTemp ), False )
-log( LOG_LEVEL_INFO, "settings/UISlider/tempStep", str( tempStep ), False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/UISlider/minTemp", str( minTemp ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/UISlider/maxTemp", str( maxTemp ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/UISlider/tempStep", str( tempStep ), timestamp=False )
 
 try:
 	tempSensor = W1ThermSensor()
@@ -383,10 +424,10 @@ pirIgnoreToStr		= "00:00" if not( settings.exists( "pir" ) ) else settings.get( 
 pirIgnoreFrom		= datetime.time( int( pirIgnoreFromStr.split( ":" )[ 0 ] ), int( pirIgnoreFromStr.split( ":" )[ 1 ] ) )
 pirIgnoreTo			= datetime.time( int( pirIgnoreToStr.split( ":" )[ 0 ] ), int( pirIgnoreToStr.split( ":" )[ 1 ] ) )
 
-log( LOG_LEVEL_INFO, "settings/pir/enabled", str( pirEnabled ), False )
-log( LOG_LEVEL_INFO, "settings/pir/checkInterval", str( pirCheckInterval ), False )
-log( LOG_LEVEL_INFO, "settings/pir/ignoreFrom", str( pirIgnoreFromStr ), False )
-log( LOG_LEVEL_INFO, "settings/pir/ignoreTo", str( pirIgnoreToStr ), False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_PIR, MSG_SUBTYPE_ARMED, str( pirEnabled ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/pir/checkInterval", str( pirCheckInterval ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/pir/ignoreFrom", str( pirIgnoreFromStr ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/pir/ignoreTo", str( pirIgnoreToStr ), timestamp=False )
 
 # GPIO Pin setup and utility routines:
 
@@ -405,10 +446,14 @@ GPIO.output( fanPin, GPIO.LOW )
 if pirEnabled:
 	GPIO.setup( pirPin, GPIO.IN )
 
-log( LOG_LEVEL_INFO, "settings/GPIO/coolPin", str( coolPin ), False )
-log( LOG_LEVEL_INFO, "settings/GPIO/heatPin", str( heatPin ), False )
-log( LOG_LEVEL_INFO, "settings/GPIO/fanPin", str( fanPin ), False )
-log( LOG_LEVEL_INFO, "settings/GPIO/pirPin", str( pirPin ), False )
+CHILD_DEVICE_HEAT					= "heat"
+CHILD_DEVICE_COOL					= "cool"
+CHILD_DEVICE_FAN					= "fan"
+
+log( LOG_LEVEL_INFO, CHILD_DEVICE_COOL, MSG_SUBTYPE_BINARY_STATUS, str( coolPin ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_HEAT, MSG_SUBTYPE_BINARY_STATUS, str( heatPin ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_FAN, MSG_SUBTYPE_BINARY_STATUS, str( fanPin ), timestamp=False )
+log( LOG_LEVEL_INFO, CHILD_DEVICE_PIR, MSG_SUBTYPE_TRIPPED, str( pirPin ), timestamp=False )
 
 
 ##############################################################################
@@ -433,8 +478,9 @@ def setControlState( control, state ):
 			control.background_color = controlColours[ "normal" ]
 		else:
 			control.background_color = controlColours[ control.text.replace( "[b]", "" ).replace( "[/b]", "" ) ]
-
-		log( LOG_LEVEL_STATE, "control/" + control.text.replace( "[b]", "" ).replace( "[/b]", "" ).lower(), "off" if state == "normal" else "on" )
+		
+		controlLabel = control.text.replace( "[b]", "" ).replace( "[/b]", "" ).lower()
+		log( LOG_LEVEL_STATE, controlLabel +  CHILD_DEVICE_SUFFIX_UICONTROL, MSG_SUBTYPE_BINARY_STATUS, "0" if state == "normal" else "1" )
 
 
 coolControl = ToggleButton( text="[b]Cool[/b]", 
@@ -564,7 +610,7 @@ def display_current_weather( dt ):
 			) )
 
 			
-			log( LOG_LEVEL_INFO, "weather/current", weather[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', weatherDetailsLabel.text ).strip() ) )
+			log( LOG_LEVEL_INFO, CHILD_DEVICE_WEATHER_CURR, MSG_SUBTYPE_TEXT, weather[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', weatherDetailsLabel.text ).strip() ) )
 
 		except:
 			interval = weatherExceptionInterval
@@ -573,7 +619,7 @@ def display_current_weather( dt ):
 			weatherSummaryLabel.text = ""
 			weatherDetailsLabel.text = ""
 
-			log( LOG_LEVEL_ERROR, "weather/current", "update failed" )
+			log( LOG_LEVEL_ERROR, CHILD_DEVICE_WEATHER_CURR, MSG_SUBTYPE_TEXT, "Update FAILED!" )
 
 		Clock.schedule_once( display_current_weather, interval )
 
@@ -641,8 +687,8 @@ def display_forecast_weather( dt ):
 
 			forecastTomoDetailsLabel.text = tomoText
 
-			log( LOG_LEVEL_INFO, "weather/forecast/today", today[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTodayDetailsLabel.text ).strip() ) )
-			log( LOG_LEVEL_INFO, "weather/forecast/tomorrow", tomo[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTomoDetailsLabel.text ).strip() ) )
+			log( LOG_LEVEL_INFO, CHILD_DEVICE_WEATHER_FCAST_TODAY, MSG_SUBTYPE_TEXT, today[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTodayDetailsLabel.text ).strip() ) )
+			log( LOG_LEVEL_INFO, CHILD_DEVICE_WEATHER_FCAST_TOMO, MSG_SUBTYPE_TEXT, tomo[ "weather" ][ 0 ][ "description" ].title() + "; " + re.sub( '\n', "; ", re.sub( ' +', ' ', forecastTomoDetailsLabel.text ).strip() ) )
 
 		except:
 			interval = weatherExceptionInterval
@@ -654,7 +700,7 @@ def display_forecast_weather( dt ):
 			forecastTomoSummaryLabel.text = ""
 			forecastTomoDetailsLabel.text = ""
 
-			log( LOG_LEVEL_ERROR, "weather/forecast", "update failed" )
+			log( LOG_LEVEL_ERROR, CHILD_DEVICE_WEATHER_FCAST_TODAY, MSG_SUBTYPE_TEXT, "Update FAILED!" )
 
 		Clock.schedule_once( display_forecast_weather, interval )
 
@@ -671,20 +717,20 @@ def get_ip_address():
 	try:
 		s.connect( ( "8.8.8.8", 80 ) )    # Google DNS server
 		ip = s.getsockname()[0] 
-		log( LOG_LEVEL_INFO, "settings/ip", ip, False )
+		log( LOG_LEVEL_INFO, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM +"/settings/ip", ip, timestamp=False )
 	except socket.error:
 		ip = "127.0.0.1"
-		log( LOG_LEVEL_ERROR, "settings/ip", "failed to get ip address, returning " + ip, False )
+		log( LOG_LEVEL_ERROR, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/settings/ip", "FAILED to get ip address, returning " + ip, timestamp=False )
 
 	return ip
 
 
 def getVersion():
-	log( LOG_LEVEL_STATE, "version", THERMOSTAT_VERSION )
+	log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_VERSION, THERMOSTAT_VERSION )
 
 
 def restart():
-	log( LOG_LEVEL_STATE, "restart", "Thermostat restarting...", single=True ) 
+	log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/restart", "Thermostat restarting...", single=True ) 
 	GPIO.cleanup()
 
 	if logFile is not None:
@@ -702,11 +748,11 @@ def setLogLevel( msg ):
 	global logLevel
 
 	if LOG_LEVELS.get( msg.payload ):
-		log( LOG_LEVEL_STATE, "loglevel", "LogLevel set to: " + msg.payload ) 
+		log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/loglevel", "LogLevel set to: " + msg.payload ) 
 
 		logLevel = LOG_LEVELS.get( msg.payload, logLevel )
 	else:
-		log( LOG_LEVEL_ERROR, "loglevel", "Invalid LogLevel: " + msg.payload ) 
+		log( LOG_LEVEL_ERROR, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/loglevel", "Invalid LogLevel: " + msg.payload ) 
 
 
 ##############################################################################
@@ -763,11 +809,11 @@ def change_system_settings():
 		statusLabel.text = get_status_string()
 
 		if hpin_start != str( GPIO.input( heatPin ) ):
-			log( LOG_LEVEL_STATE, "system/heat", "on" if GPIO.input( heatPin ) else "off" )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_HEAT, MSG_SUBTYPE_BINARY_STATUS, "1" if GPIO.input( heatPin ) else "0" )
 		if cpin_start != str( GPIO.input( coolPin ) ):
-			log( LOG_LEVEL_STATE, "system/cool", "on" if GPIO.input( coolPin ) else "off" )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_COOL, MSG_SUBTYPE_BINARY_STATUS, "1" if GPIO.input( coolPin ) else "0" )
 		if fpin_start != str( GPIO.input( fanPin ) ):
-			log( LOG_LEVEL_STATE, "system/fan", "on" if GPIO.input( fanPin ) else "off" )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_FAN, MSG_SUBTYPE_BINARY_STATUS, "1" if GPIO.input( fanPin ) else "0" )
 
 
 # This callback will be bound to the touch screen UI buttons:
@@ -799,8 +845,8 @@ def check_sensor_temp( dt ):
 			rawTemp = tempSensor.get_temperature( sensorUnits )
 			correctedTemp = ( ( ( rawTemp - freezingMeasured ) * referenceRange ) / measuredRange ) + freezingPoint
 			currentTemp = round( correctedTemp, 1 )
-			log( LOG_LEVEL_DEBUG, "state/system/temperature/raw", str( rawTemp ) )
-			log( LOG_LEVEL_DEBUG, "state/system/temperature/corrected", str( correctedTemp ) )
+			log( LOG_LEVEL_DEBUG, CHILD_DEVICE_TEMP, MSG_SUBTYPE_CUSTOM + "/raw", str( rawTemp ) )
+			log( LOG_LEVEL_DEBUG, CHILD_DEVICE_TEMP, MSG_SUBTYPE_CUSTOM + "/corrected", str( correctedTemp ) )
 
 		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
 		altCurLabel.text  = currentLabel.text
@@ -813,7 +859,7 @@ def check_sensor_temp( dt ):
 		altTimeLabel.text  	= timeLabel.text
 
 		if priorCurrent != currentTemp:
-			log( LOG_LEVEL_STATE, "system/temperature/current", str( currentTemp ) )		
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_TEMP, MSG_SUBTYPE_TEMPERATURE, str( currentTemp ) )		
 
 		change_system_settings()
 
@@ -827,7 +873,7 @@ def update_set_temp( slider, value ):
 		setTemp = round( slider.value, 1 )
 		setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
 		if priorTemp != setTemp:
-			log( LOG_LEVEL_STATE, "system/temperature/set/ui", str( setTemp ) )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_UICONTROL_SLIDER, MSG_SUBTYPE_TEMPERATURE, str( setTemp ) )
 
 
 # Check the PIR motion sensor status
@@ -837,7 +883,7 @@ def check_pir( pin ):
 
 	with thermostatLock:
 		if GPIO.input( pirPin ): 
-			log( LOG_LEVEL_INFO, "state/system/pir", "Motion detected on PIR pin: " + str( pirPin ) + "!" )
+			log( LOG_LEVEL_INFO, CHILD_DEVICE_PIR, MSG_SUBTYPE_TRIPPED, "1" )
 
 			if minUITimer != None:
 				  Clock.unschedule( show_minimal_ui )
@@ -856,10 +902,10 @@ def check_pir( pin ):
 
 			if screenMgr.current == "minimalUI" and not( ignore ):
 				screenMgr.current = "thermostatUI"
-				log( LOG_LEVEL_DEBUG, "state/screen", "Full" )
+				log( LOG_LEVEL_DEBUG, CHILD_DEVICE_SCREEN, MSG_SUBTYPE_TEXT, "Full" )
 	
 		else:
-			log( LOG_LEVEL_DEBUG, "state/system/pir", "No Motion detected on PIR pin: " + str( pirPin ) )
+			log( LOG_LEVEL_DEBUG, CHILD_DEVICE_PIR, MSG_SUBTYPE_TRIPPED, "0" )
 
 
 # Minimal UI Display functions and classes
@@ -867,7 +913,7 @@ def check_pir( pin ):
 def show_minimal_ui( dt ):
 	with thermostatLock:
 		screenMgr.current = "minimalUI"
-		log( LOG_LEVEL_DEBUG, "state/screen", "Minimal" )
+		log( LOG_LEVEL_DEBUG, CHILD_DEVICE_SCREEN, MSG_SUBTYPE_TEXT, "Minimal" )
 
 
 class MinimalScreen( Screen ):
@@ -886,7 +932,7 @@ class MinimalScreen( Screen ):
 					Clock.unschedule( show_minimal_ui )
 				minUITimer = Clock.schedule_once( show_minimal_ui, minUITimeout )
 				self.manager.current = "thermostatUI"
-				log( LOG_LEVEL_DEBUG, "state/screen", "Full" )
+				log( LOG_LEVEL_DEBUG, CHILD_DEVICE_SCREEN, MSG_SUBTYPE_TEXT, "Full" )
 			return True
 
 
@@ -1044,11 +1090,11 @@ class ThermostatApp( App ):
 ##############################################################################
 
 def startScheduler():
-	log( LOG_LEVEL_INFO, "scheduler", "started" )
+	log( LOG_LEVEL_INFO, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_TEXT, "Started" )
 	while True:
 		if holdControl.state == "normal":
 			with scheduleLock:
-				log( LOG_LEVEL_DEBUG, "scheduler", "Running pending" )
+				log( LOG_LEVEL_DEBUG, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_TEXT, "Running pending" )
 				schedule.run_pending()
 
 		time.sleep( 10 )
@@ -1061,7 +1107,7 @@ def setScheduledTemp( temp ):
 			setTemp = round( temp, 1 )
 			setLabel.text = "  Set\n[b]" + str( setTemp ) + scaleUnits + "[/b]"
 			tempSlider.value = setTemp
-			log( LOG_LEVEL_STATE, "system/temperature/set/schedule", str( setTemp ) )
+			log( LOG_LEVEL_STATE, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_TEMPERATURE, str( setTemp ) )
 
 
 def getTestSchedule():
@@ -1094,21 +1140,21 @@ def reloadSchedule():
 			if holdControl.state != "down":
 				if heatControl.state == "down":
 					activeSched = thermoSched[ "heat" ]  
-					log( LOG_LEVEL_INFO, "schedule/load", "heat" )
+					log( LOG_LEVEL_INFO, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_CUSTOM + "/load", "heat" )
 				elif coolControl.state == "down":
 					activeSched = thermoSched[ "cool" ]  
-					log( LOG_LEVEL_INFO, "schedule/load", "cool" )
+					log( LOG_LEVEL_INFO, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_CUSTOM + "/load", "cool" )
 
 				if useTestSchedule: 
 					activeSched = getTestSchedule()
-					log( LOG_LEVEL_INFO, "schedule/load", "test" )
+					log( LOG_LEVEL_INFO, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_CUSTOM + "/load", "test" )
 					print "Using Test Schedule!!!"
 	
 		if activeSched != None:
 			for day, entries in activeSched.iteritems():
 				for i, entry in enumerate( entries ):
 					getattr( schedule.every(), day ).at( entry[ 0 ] ).do( setScheduledTemp, entry[ 1 ] )
-					log( LOG_LEVEL_DEBUG, "schedule/set", day + ", at: " + entry[ 0 ] + " = " + str( entry[ 1 ] ) + scaleUnits )
+					log( LOG_LEVEL_DEBUG, CHILD_DEVICE_SCHEDULER, MSG_SUBTYPE_TEXT, "Set " + day + ", at: " + entry[ 0 ] + " = " + str( entry[ 1 ] ) + scaleUnits )
 
 
 ##############################################################################
@@ -1121,7 +1167,7 @@ class WebInterface( object ):
 
 	@cherrypy.expose
 	def index( self ):	
-		log( LOG_LEVEL_INFO, "webserver/served/thermostat.html", cherrypy.request.remote.ip )	
+		log( LOG_LEVEL_INFO, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEXT, "Served thermostat.html to: " + cherrypy.request.remote.ip )	
 		file = open( "web/html/thermostat.html", "r" )
 
 		html = file.read()
@@ -1159,7 +1205,7 @@ class WebInterface( object ):
 		global coolControl
 		global fanControl
 
-		log( LOG_LEVEL_INFO, "webserver/set/thermostat", cherrypy.request.remote.ip )	
+		log( LOG_LEVEL_INFO, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEXT, "Set thermostat received from: " + cherrypy.request.remote.ip )	
 
 		tempChanged = setTemp != float( temp )
 
@@ -1213,7 +1259,7 @@ class WebInterface( object ):
 
 	@cherrypy.expose
 	def schedule( self ):	
-		log( LOG_LEVEL_INFO, "webserver/served/thermostat_schedule.html", cherrypy.request.remote.ip )			
+		log( LOG_LEVEL_INFO, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEXT, "Served thermostat_schedule.html to: " + cherrypy.request.remote.ip )			
 		file = open( "web/html/thermostat_schedule.html", "r" )
 
 		html = file.read()
@@ -1233,7 +1279,7 @@ class WebInterface( object ):
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	def save( self ):
-		log( LOG_LEVEL_STATE, "schedule/set/web", cherrypy.request.remote.ip )	
+		log( LOG_LEVEL_STATE, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEXT, "Set schedule received from: " + cherrypy.request.remote.ip )	
 		schedule = cherrypy.request.json
 
 		with scheduleLock:
@@ -1263,7 +1309,7 @@ def startWebServer():
 	cherrypy.server.socket_host = host if host != "discover" else get_ip_address()								# use machine IP address if host = "discover"
 	cherrypy.server.socket_port = 80 if not( settings.exists( "web" ) ) else settings.get( "web" )[ "port" ]
 
-	log( LOG_LEVEL_STATE, "webserver/startup", "starting on " + cherrypy.server.socket_host + ":" + str( cherrypy.server.socket_port ) )
+	log( LOG_LEVEL_STATE, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEXT, "Starting on " + cherrypy.server.socket_host + ":" + str( cherrypy.server.socket_port ) )
 
 	conf = {
 		'/': {
@@ -1329,7 +1375,7 @@ if __name__ == '__main__':
 	try:
 		main()
 	finally:
-		log( LOG_LEVEL_STATE, "shutdown", "Thermostat Shutting Down..." )
+		log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_CUSTOM + "/shutdown", "Thermostat Shutting Down..." )
 		GPIO.cleanup()
 
 		if logFile is not None:
