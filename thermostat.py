@@ -182,7 +182,7 @@ MSG_SUBTYPE_TEXT					= "text"
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.5"
+THERMOSTAT_VERSION = "1.9.6"
 
 # Debug settings
 
@@ -1215,7 +1215,7 @@ class WebInterface( object ):
 			tempSlider.value = setTemp
 
 			if tempChanged:
-				log( LOG_LEVEL_STATE, "system/temperature/set/web", str( setTemp ) )
+				log( LOG_LEVEL_STATE, CHILD_DEVICE_WEBSERVER, MSG_SUBTYPE_TEMPERATURE, str( setTemp ) )
 
 			if heat == "on":
 				setControlState( heatControl, "down" )
