@@ -158,10 +158,31 @@ CHILD_DEVICE_HEAT					= "heat"
 CHILD_DEVICE_COOL					= "cool"
 CHILD_DEVICE_FAN					= "fan"
 CHILD_DEVICE_PIR					= "motionSensor"
-CHILD_DEVICE_TEMP					= "temperature"
+CHILD_DEVICE_TEMP					= "temperatureSensor"
 CHILD_DEVICE_SCREEN					= "screen"
 CHILD_DEVICE_SCHEDULER				= "scheduler"
 CHILD_DEVICE_WEBSERVER				= "webserver"
+
+CHILD_DEVICES						= [
+	CHILD_DEVICE_NODE,
+	CHILD_DEVICE_MQTT,
+	CHILD_DEVICE_UICONTROL_HEAT,
+	CHILD_DEVICE_UICONTROL_COOL,
+	CHILD_DEVICE_UICONTROL_FAN,
+	CHILD_DEVICE_UICONTROL_HOLD,
+	CHILD_DEVICE_UICONTROL_SLIDER,
+	CHILD_DEVICE_WEATHER_CURR,
+	CHILD_DEVICE_WEATHER_FCAST_TODAY,
+	CHILD_DEVICE_WEATHER_FCAST_TOMO,
+	CHILD_DEVICE_HEAT,
+	CHILD_DEVICE_COOL,
+	CHILD_DEVICE_FAN,
+	CHILD_DEVICE_PIR,
+	CHILD_DEVICE_TEMP,
+	CHILD_DEVICE_SCREEN,
+	CHILD_DEVICE_SCHEDULER,
+	CHILD_DEVICE_WEBSERVER
+]
 
 CHILD_DEVICE_SUFFIX_UICONTROL		= "Control"
 
@@ -182,7 +203,7 @@ MSG_SUBTYPE_TEXT					= "text"
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.7"
+THERMOSTAT_VERSION = "1.9.8"
 
 # Debug settings
 
@@ -334,9 +355,17 @@ if mqttEnabled:
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
 
+# Send presentations for Node
+
 log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_NAME, "Thermostat Starting Up...", msg_type=MSG_TYPE_PRESENTATION )
 log( LOG_LEVEL_STATE, CHILD_DEVICE_NODE, MSG_SUBTYPE_VERSION, THERMOSTAT_VERSION, msg_type=MSG_TYPE_PRESENTATION )
 
+#send presentations for all other child "sensors"
+
+for i in range( len( CHILD_DEVICES ) ):
+	child = CHILD_DEVICES[ i ]
+	if child != CHILD_DEVICE_NODE:
+		log( LOG_LEVEL_STATE, child, child, "", msg_type=MSG_TYPE_PRESENTATION )
 
 # Various temperature settings:
 
