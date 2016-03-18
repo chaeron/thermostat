@@ -182,7 +182,7 @@ MSG_SUBTYPE_TEXT					= "text"
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.6"
+THERMOSTAT_VERSION = "1.9.7"
 
 # Debug settings
 
@@ -349,7 +349,10 @@ sensorUnits		  = W1ThermSensor.DEGREES_C if tempScale == "metric" else W1ThermSe
 windFactor		  = 3.6 if tempScale == "metric" else 1.0
 windUnits		  = " km/h" if tempScale == "metric" else " mph"
 
+TEMP_TOLERANCE	  = 0.1 if tempScale == "metric" else 0.18
+
 currentTemp       = 22.0 if tempScale == "metric" else 72.0
+priorCorrected    = -100.0
 setTemp           = 22.0 if not( state.exists( "state" ) ) else state.get( "state" )[ "setTemp" ]
 
 tempHysteresis    = 0.5  if not( settings.exists( "thermostat" ) ) else settings.get( "thermostat" )[ "tempHysteresis" ]
@@ -837,16 +840,19 @@ def control_callback( control ):
 
 def check_sensor_temp( dt ):
 	with thermostatLock:
-		global currentTemp
+		global currentTemp, priorCorrected
 		global tempSensor
-		priorCurrent = currentTemp
-
+		
 		if tempSensor is not None:
 			rawTemp = tempSensor.get_temperature( sensorUnits )
 			correctedTemp = ( ( ( rawTemp - freezingMeasured ) * referenceRange ) / measuredRange ) + freezingPoint
 			currentTemp = round( correctedTemp, 1 )
 			log( LOG_LEVEL_DEBUG, CHILD_DEVICE_TEMP, MSG_SUBTYPE_CUSTOM + "/raw", str( rawTemp ) )
 			log( LOG_LEVEL_DEBUG, CHILD_DEVICE_TEMP, MSG_SUBTYPE_CUSTOM + "/corrected", str( correctedTemp ) )
+
+			if abs( priorCorrected - correctedTemp ) >= TEMP_TOLERANCE:
+				log( LOG_LEVEL_STATE, CHILD_DEVICE_TEMP, MSG_SUBTYPE_TEMPERATURE, str( currentTemp ) )	
+				priorCorrected = correctedTemp	
 
 		currentLabel.text = "[b]" + str( currentTemp ) + scaleUnits + "[/b]"
 		altCurLabel.text  = currentLabel.text
@@ -857,9 +863,6 @@ def check_sensor_temp( dt ):
 
 		timeLabel.text      = ( "[b]" + ( timeStr if timeStr[0:1] != "0" else timeStr[1:] ) + "[/b]" ).lower()
 		altTimeLabel.text  	= timeLabel.text
-
-		if priorCurrent != currentTemp:
-			log( LOG_LEVEL_STATE, CHILD_DEVICE_TEMP, MSG_SUBTYPE_TEMPERATURE, str( currentTemp ) )		
 
 		change_system_settings()
 
