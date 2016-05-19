@@ -203,7 +203,7 @@ MSG_SUBTYPE_TEXT					= "text"
 #                                                                            #
 ##############################################################################
 
-THERMOSTAT_VERSION = "1.9.8"
+THERMOSTAT_VERSION = "1.9.9"
 
 # Debug settings
 
@@ -352,6 +352,14 @@ for case in switch( loggingChannel ):
 logLevel = LOG_LEVELS.get( loggingLevel, LOG_LEVEL_NONE )
 
 if mqttEnabled:
+	# Make sure we can reach the mqtt server by pinging it
+	pingCount = 0;
+	pingCmd	  = "ping -c 1 " + mqttServer
+
+	while os.system( pingCmd ) != 0 and pingCount <= 100:
+		++pingCount
+		time.sleep( 1 )
+
 	mqttc.connect( mqttServer, mqttPort )
 	mqttc.loop_start()
 
